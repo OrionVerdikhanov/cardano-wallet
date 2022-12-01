@@ -64,6 +64,7 @@ library
     , lattices
     , memory
     , MonadRandom
+    , monoid-subclasses
     , network-uri
     , nothunks
     , OddWord
@@ -75,6 +76,7 @@ library
     , strict-non-empty-containers
     , text
     , text-class
+    , total-monoidal-maps
     , transformers
     , unliftio
     , unliftio-core

@@ -50,10 +50,10 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 -- repeating the index-state for hackage to work around hackage.nix parsing limitation
-index-state: 2023-03-06T05:24:58Z
+index-state: 2023-05-02T13:18:32Z
 
 index-state:
-  , hackage.haskell.org 2023-03-06T05:24:58Z
+  , hackage.haskell.org 2023-05-02T13:18:32Z
   , cardano-haskell-packages 2023-02-28T09:20:07Z
 
 packages:
@@ -91,6 +91,12 @@ source-repository-package
   location: https://github.com/paolino/openapi3
   tag: c30d0de6875d75edd64d1aac2272886528bc492d
   --sha256: 0b0fzj5vrnfrc8qikabxhsnp4p8lrjpssblbh2rb7aji5hzzfli9
+
+source-repository-package
+  type: git
+  location: https://github.com/jonathanknowles/total-monoidal-maps
+  tag: 47b44d06d72438d5313a9de55a9b635975672d99
+  --sha256: 0v278djpnkq57bb6jq4rmr45z85pnfkjvavrf0idrp6z9syid3ff
 
 source-repository-package
     type: git
