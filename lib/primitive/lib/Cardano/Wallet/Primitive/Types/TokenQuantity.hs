@@ -54,6 +54,8 @@ import Data.Maybe
     ( fromMaybe )
 import Data.Monoid
     ( Sum (..) )
+import Data.Monoid.Null
+    ( MonoidNull (..) )
 import Data.Text.Class
     ( FromText (..), ToText (..) )
 import Fmt
@@ -81,7 +83,7 @@ import Quiet
 newtype TokenQuantity = TokenQuantity
     { unTokenQuantity :: Natural }
     deriving stock (Eq, Ord, Generic)
-    deriving (Semigroup, Monoid) via Sum Natural
+    deriving (Semigroup, Monoid, MonoidNull) via Sum Natural
     deriving (Read, Show) via (Quiet TokenQuantity)
     deriving anyclass (NFData, Hashable)
 
