@@ -128,8 +128,6 @@ import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Map.Strict
     ( Map )
-import Data.Map.Strict.NonEmptyMap
-    ( NonEmptyMap )
 import Data.Maybe
     ( mapMaybe )
 import Data.Ord
@@ -159,7 +157,6 @@ import qualified Data.Foldable as F
 import qualified Data.List as L
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
-import qualified Data.Map.Strict.NonEmptyMap as NEMap
 import qualified Data.Monoid.Null as MonoidNull
 import qualified Data.Set as Set
 import qualified Data.Total.MonoidMap as MonoidMap
@@ -486,10 +483,8 @@ fromNestedList entries = fromFlatList
 
 -- | Creates a token map from a nested map.
 --
-fromNestedMap
-    :: Map TokenPolicyId (NonEmptyMap TokenName TokenQuantity)
-    -> TokenMap
-fromNestedMap = fromNestedList . Map.toList . fmap NEMap.toList
+fromNestedMap :: Map TokenPolicyId (Map TokenName TokenQuantity) -> TokenMap
+fromNestedMap = TokenMap . MonoidMap.fromMap . fmap MonoidMap.fromMap
 
 --------------------------------------------------------------------------------
 -- Deconstruction
@@ -514,11 +509,8 @@ toNestedList (TokenMap m) =
 
 -- | Converts a token map to a nested map.
 --
-toNestedMap
-    :: TokenMap
-    -> Map TokenPolicyId (NonEmptyMap TokenName TokenQuantity)
-toNestedMap (TokenMap m) =
-    Map.mapMaybe NEMap.fromMap $ MonoidMap.toMap <$> MonoidMap.toMap m
+toNestedMap :: TokenMap -> Map TokenPolicyId (Map TokenName TokenQuantity)
+toNestedMap (TokenMap m) = MonoidMap.toMap <$> MonoidMap.toMap m
 
 --------------------------------------------------------------------------------
 -- Filtering
