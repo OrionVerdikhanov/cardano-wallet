@@ -114,7 +114,6 @@ import qualified Cardano.Wallet.Primitive.Types.Coin as Coin
 import qualified Cardano.Wallet.Primitive.Types.TokenBundle as TokenBundle
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as TokenMap
 import qualified Data.Map.Strict as Map
-import qualified Data.Map.Strict.NonEmptyMap as NonEmptyMap
 import qualified Ouroboros.Network.Block as O
 
 --------------------------------------------------------------------------------
@@ -175,7 +174,6 @@ toLedgerTokenBundle bundle =
         & Map.mapKeys toLedgerTokenPolicyId
         & Map.map mapInner
     mapInner inner = inner
-        & NonEmptyMap.toMap
         & Map.mapKeys toLedgerTokenName
         & Map.map toLedgerTokenQuantity
 
@@ -187,7 +185,6 @@ toWalletTokenBundle (Ledger.MaryValue ledgerAda ledgerTokens) =
     walletTokens = ledgerTokens
         & Map.mapKeys toWalletTokenPolicyId
         & Map.map mapInner
-        & Map.mapMaybe NonEmptyMap.fromMap
     mapInner inner = inner
         & Map.mapKeys toWalletTokenName
         & Map.map toWalletTokenQuantity
