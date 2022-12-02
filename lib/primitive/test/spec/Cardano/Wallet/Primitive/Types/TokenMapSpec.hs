@@ -262,6 +262,8 @@ spec =
             property prop_adjustQuantity_hasQuantity
         it "prop_maximumQuantity_all" $
             property prop_maximumQuantity_all
+        it "prop_maximumQuantity_mempty" $
+            property prop_maximumQuantity_mempty
 
     describe "Queries" $ do
 
@@ -705,6 +707,9 @@ prop_maximumQuantity_all b =
     property $ all (<= maxQ) (snd <$> TokenMap.toFlatList b)
   where
     maxQ = TokenMap.maximumQuantity b
+
+prop_maximumQuantity_mempty :: Property
+prop_maximumQuantity_mempty = TokenMap.maximumQuantity mempty === mempty
 
 --------------------------------------------------------------------------------
 -- Queries
