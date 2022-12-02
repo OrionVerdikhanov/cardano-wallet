@@ -185,8 +185,6 @@ import Data.List.Extra
     ( enumerate )
 import Data.Map
     ( Map )
-import Data.Map.Strict.NonEmptyMap.Internal
-    ( NonEmptyMap )
 import Data.Maybe
     ( catMaybes, fromJust )
 import Data.Quantity
@@ -693,9 +691,6 @@ instance Traversable t => Rank2.Traversable (At t) where
 deriving instance ToExpr s => ToExpr (Model s Concrete)
 
 instance ToExpr s => ToExpr (Mock s) where
-    toExpr = genericToExpr
-
-instance (ToExpr k, ToExpr v) => ToExpr (NonEmptyMap k v) where
     toExpr = genericToExpr
 
 instance ToExpr WalletId where
