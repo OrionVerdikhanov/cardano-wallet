@@ -184,7 +184,6 @@ library
     , stm
     , streaming-commons
     , cardano-strict-containers
-    , strict-non-empty-containers
     , strict-stm
     , string-interpolate
     , template-haskell
@@ -837,7 +836,6 @@ test-suite unit
     , should-not-typecheck
     , splitmix
     , cardano-strict-containers
-    , strict-non-empty-containers
     , string-interpolate
     , string-qq
     , temporary
