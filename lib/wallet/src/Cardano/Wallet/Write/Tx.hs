@@ -136,7 +136,7 @@ module Cardano.Wallet.Write.Tx
 import Prelude
 
 import Cardano.Api
-    ( AlonzoEra, BabbageEra )
+    ( AlonzoEra, BabbageEra, ConwayEra )
 import Cardano.Api.Shelley
     ( ShelleyLedgerEra )
 import Cardano.Crypto.Hash
@@ -229,8 +229,9 @@ type LatestLedgerEra = StandardBabbage
 -- NOTE: We /could/ let 'era' refer to eras from the ledger rather than from
 -- cardano-api.
 data RecentEra era where
-    RecentEraBabbage :: RecentEra BabbageEra
     RecentEraAlonzo :: RecentEra AlonzoEra
+    RecentEraBabbage :: RecentEra BabbageEra
+    RecentEraConway :: RecentEra ConwayEra
 
 deriving instance Eq (RecentEra era)
 deriving instance Show (RecentEra era)
@@ -241,6 +242,7 @@ class (Cardano.IsShelleyBasedEra era, Typeable era) => IsRecentEra era where
 -- | Return a proof that the wallet can create txs in this era, or @Nothing@.
 toRecentEra :: Cardano.CardanoEra era -> Maybe (RecentEra era)
 toRecentEra = \case
+    Cardano.ConwayEra  -> Just RecentEraConway
     Cardano.BabbageEra -> Just RecentEraBabbage
     Cardano.AlonzoEra  -> Just RecentEraAlonzo
     Cardano.MaryEra    -> Nothing
@@ -250,6 +252,7 @@ toRecentEra = \case
 
 fromRecentEra :: RecentEra era -> Cardano.CardanoEra era
 fromRecentEra = \case
+  RecentEraConway -> Cardano.ConwayEra
   RecentEraBabbage -> Cardano.BabbageEra
   RecentEraAlonzo -> Cardano.AlonzoEra
 
@@ -259,6 +262,9 @@ instance IsRecentEra BabbageEra where
 instance IsRecentEra AlonzoEra where
     recentEra = RecentEraAlonzo
 
+instance IsRecentEra ConwayEra where
+    recentEra = RecentEraConway
+
 cardanoEraFromRecentEra :: RecentEra era -> Cardano.CardanoEra era
 cardanoEraFromRecentEra =
     Cardano.shelleyBasedToCardanoEra
@@ -266,6 +272,7 @@ cardanoEraFromRecentEra =
 
 shelleyBasedEraFromRecentEra :: RecentEra era -> Cardano.ShelleyBasedEra era
 shelleyBasedEraFromRecentEra = \case
+    RecentEraConway -> Cardano.ShelleyBasedEraConway
     RecentEraBabbage -> Cardano.ShelleyBasedEraBabbage
     RecentEraAlonzo -> Cardano.ShelleyBasedEraAlonzo
 
@@ -414,7 +421,7 @@ scriptFromCardanoScriptInAnyLang
 -- @
 --     scriptToCardanoScriptInAnyLang . scriptFromCardanoScriptInAnyLang
 -- @
--- will convert 'SimpleScriptV1' to 'SimpleScriptV2'. Because 'SimpleScriptV1'
+-- will convert 'SimpleScript' to 'SimpleScript'. Because 'SimpleScript'
 -- is 'ShelleyEra'-specific, and 'ShelleyEra' is not a 'RecentEra', this should
 -- not be a problem.
 scriptToCardanoScriptInAnyLang
@@ -431,7 +438,7 @@ scriptToCardanoScriptInAnyLang =
 -- @
 --     scriptToCardanoEnvelopeJSON . scriptFromCardanoEnvelopeJSON
 -- @
--- will convert 'SimpleScriptV1' to 'SimpleScriptV2'. Because 'SimpleScriptV1'
+-- will convert 'SimpleScript' to 'SimpleScript'. Because 'SimpleScript'
 -- is 'ShelleyEra'-specific, and 'ShelleyEra' is not a 'RecentEra', this should
 -- not be a problem.
 scriptToCardanoEnvelopeJSON :: AlonzoScript LatestLedgerEra -> Aeson.Value
@@ -449,8 +456,7 @@ scriptToCardanoEnvelopeJSON = scriptToJSON . scriptToCardanoScriptInAnyLang
             -> (Cardano.IsScriptLanguage lang => a)
             -> a
         obtainScriptLangConstraint lang f = case lang of
-            Cardano.SimpleScriptLanguage Cardano.SimpleScriptV1 -> f
-            Cardano.SimpleScriptLanguage Cardano.SimpleScriptV2 -> f
+            Cardano.SimpleScriptLanguage -> f
             Cardano.PlutusScriptLanguage Cardano.PlutusScriptV1 -> f
             Cardano.PlutusScriptLanguage Cardano.PlutusScriptV2 -> f
 
@@ -475,13 +481,11 @@ scriptFromCardanoEnvelopeJSON v = fmap scriptFromCardanoScriptInAnyLang $ do
       :: [Cardano.FromSomeType Cardano.HasTextEnvelope Cardano.ScriptInAnyLang]
     textEnvTypes =
         [ Cardano.FromSomeType
-            (Cardano.AsScript Cardano.AsSimpleScriptV1)
-            (Cardano.ScriptInAnyLang
-                (Cardano.SimpleScriptLanguage Cardano.SimpleScriptV1))
+            (Cardano.AsScript Cardano.AsSimpleScript)
+            (Cardano.ScriptInAnyLang Cardano.SimpleScriptLanguage)
         , Cardano.FromSomeType
-            (Cardano.AsScript Cardano.AsSimpleScriptV2)
-            (Cardano.ScriptInAnyLang
-                (Cardano.SimpleScriptLanguage Cardano.SimpleScriptV2))
+            (Cardano.AsScript Cardano.AsSimpleScript)
+            (Cardano.ScriptInAnyLang Cardano.SimpleScriptLanguage)
         , Cardano.FromSomeType
             (Cardano.AsScript Cardano.AsPlutusScriptV1)
             (Cardano.ScriptInAnyLang
@@ -515,7 +519,7 @@ binaryDataToBytes =
     . Alonzo.binaryDataToData
 
 datumFromCardanoScriptData
-    :: Cardano.ScriptData
+    :: Cardano.HashableScriptData
     -> BinaryData LatestLedgerEra
 datumFromCardanoScriptData =
     Alonzo.dataToBinaryData
@@ -523,7 +527,7 @@ datumFromCardanoScriptData =
 
 datumToCardanoScriptData
     :: BinaryData LatestLedgerEra
-    -> Cardano.ScriptData
+    -> Cardano.HashableScriptData
 datumToCardanoScriptData =
     Cardano.fromAlonzoData
     . Alonzo.binaryDataToData
@@ -767,8 +771,8 @@ fromCardanoTx = \case
 -- @
 --     toCardanoUTxO . fromCardanoUTxO
 -- @
--- will mark any 'SimpleScriptV1' reference scripts as 'SimpleScriptV2'. Because
--- 'SimpleScriptV1' is 'ShelleyEra'-specific, and 'ShelleyEra' is not a
+-- will mark any 'SimpleScript' reference scripts as 'SimpleScript'. Because
+-- 'SimpleScript' is 'ShelleyEra'-specific, and 'ShelleyEra' is not a
 -- 'RecentEra', this should not be a problem.
 toCardanoUTxO
     :: forall era. IsRecentEra era
@@ -849,7 +853,8 @@ evaluateMinimumFee era pp tx kwc =
 -- is not automatically the minimum fee.
 --
 evaluateTransactionBalance
-    :: RecentEra era
+    :: Babbage.ShelleyEraTxBody (ShelleyLedgerEra era)
+    => RecentEra era
     -> Core.PParams (Cardano.ShelleyLedgerEra era)
     -> Shelley.UTxO (Cardano.ShelleyLedgerEra era)
     -> Core.TxBody (Cardano.ShelleyLedgerEra era)
@@ -881,5 +886,6 @@ withCLIConstraint
     -> (CLI (ShelleyLedgerEra era) => a)
     -> a
 withCLIConstraint era a = case era of
+    RecentEraConway -> a
     RecentEraBabbage -> a
     RecentEraAlonzo -> a
