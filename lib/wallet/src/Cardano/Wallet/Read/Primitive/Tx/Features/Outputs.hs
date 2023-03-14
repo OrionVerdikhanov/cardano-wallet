@@ -37,6 +37,7 @@ import Ouroboros.Consensus.Shelley.Eras
     ( StandardAllegra
     , StandardAlonzo
     , StandardBabbage
+    , StandardConway
     , StandardMary
     , StandardShelley
     )
@@ -66,7 +67,8 @@ getOutputs = EraFun
     , allegraFun = \(Outputs os) -> K . fmap fromAllegraTxOut $ toList os
     , maryFun = \(Outputs os) -> K . fmap fromMaryTxOut $ toList os
     , alonzoFun = \(Outputs os) -> K . fmap fromAlonzoTxOut $ toList os
-    , babbageFun = \(Outputs os) -> K . fmap (fst . fromBabbageTxOut) $ toList os
+    , babbageFun = \(Outputs os) -> K . fmap fromBabbageTxOut $ toList os
+    , conwayFun = \(Outputs os) -> K . fmap fromConwayTxOut $ toList os
     }
 
 fromShelleyAddress :: SL.Addr crypto -> W.Address
@@ -104,6 +106,13 @@ fromBabbageTxOut (Babbage.TxOut addr value _datum refScript) =
           SJust s -> Just s
           SNothing -> Nothing
     )
+
+fromConwayTxOut
+    :: Babbage.BabbageTxOut StandardConway
+    -> W.TxOut
+fromConwayTxOut (Babbage.BabbageTxOut addr value _datum _refScript) =
+    W.TxOut (fromShelleyAddress addr) $
+    fromCardanoValue $ Cardano.fromMaryValue value
 
 -- Lovelace to coin. Quantities from ledger should always fit in Word64.
 fromCardanoLovelace :: HasCallStack => Cardano.Lovelace -> W.Coin

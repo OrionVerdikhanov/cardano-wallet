@@ -31,7 +31,7 @@ import Cardano.Wallet.Read.Eras
 import Cardano.Wallet.Read.Tx.Metadata
     ( Metadata (..) )
 import Ouroboros.Consensus.Shelley.Eras
-    ( AlonzoEra, BabbageEra, StandardCrypto )
+    ( AlonzoEra, BabbageEra, ConwayEra, StandardCrypto )
 
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Api.Shelley as CardanoAPI
@@ -48,6 +48,7 @@ getMetadata = EraFun
     , maryFun = yesMetadata  fromMaryMetadata
     , alonzoFun = yesMetadata fromAlonzoMetadata
     , babbageFun = yesMetadata fromBabbageMetadata
+    , conwayFun = yesMetadata fromConwayMetadata
     }
     where
         noMetadatas _ = K Nothing
@@ -76,4 +77,8 @@ fromAlonzoMetadata (AL.AlonzoAuxiliaryData blob _scripts)
 
 fromBabbageMetadata :: AuxiliaryData (BabbageEra StandardCrypto) -> W.TxMetadata
 fromBabbageMetadata (AL.AlonzoAuxiliaryData blob _scripts)
+    = fromShelleyMetadata $ SL.Metadata blob
+
+fromConwayMetadata :: AuxiliaryData (ConwayEra StandardCrypto) -> W.TxMetadata
+fromConwayMetadata (AL.AlonzoAuxiliaryData blob _scripts)
     = fromShelleyMetadata $ SL.Metadata blob
