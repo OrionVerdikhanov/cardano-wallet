@@ -574,14 +574,14 @@ unwrapTxOutInRecentEra
     -> TxOutInRecentEra
     -> Either ErrInvalidTxOutInEra (TxOut (ShelleyLedgerEra era))
 unwrapTxOutInRecentEra era recentEraTxOut = case era of
-    RecentEraConway -> pure $ castTxOut recentEraTxOut
+    RecentEraConway -> pure $ castConwayTxOut recentEraTxOut
     RecentEraBabbage -> pure $ castBabbageTxOut recentEraTxOut
     RecentEraAlonzo -> downcastTxOut recentEraTxOut
 
-castTxOut
+castConwayTxOut
     :: TxOutInRecentEra
     -> TxOut (ShelleyLedgerEra ConwayEra)
-castTxOut (TxOutInRecentEra addr val datum mscript) =
+castConwayTxOut (TxOutInRecentEra addr val datum mscript) =
     Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
 
 castBabbageTxOut
@@ -694,7 +694,7 @@ utxoFromTxOutsInLatestEra
     :: [(TxIn, TxOutInRecentEra)]
     -> Shelley.UTxO LatestLedgerEra
 utxoFromTxOutsInLatestEra = withStandardCryptoConstraint RecentEraBabbage $
-    Shelley.UTxO . Map.fromList . map (second castTxOut)
+    Shelley.UTxO . Map.fromList . map (second castConwayTxOut)
 
 --------------------------------------------------------------------------------
 -- Tx
