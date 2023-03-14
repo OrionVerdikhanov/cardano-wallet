@@ -580,13 +580,13 @@ unwrapTxOutInRecentEra era recentEraTxOut = case era of
 
 castConwayTxOut
     :: TxOutInRecentEra
-    -> TxOut (ShelleyLedgerEra ConwayEra)
+    -> Babbage.BabbageTxOut LatestLedgerEra
 castConwayTxOut (TxOutInRecentEra addr val datum mscript) =
     Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
 
 castBabbageTxOut
     :: TxOutInRecentEra
-    -> Babbage.BabbageTxOut (ShelleyLedgerEra BabbageEra)
+    -> TxOut LatestLedgerEra
 castBabbageTxOut (TxOutInRecentEra addr val datum mscript) =
     Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
 
