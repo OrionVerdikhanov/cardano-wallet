@@ -19,6 +19,8 @@ import Cardano.Binary
     ( serialize' )
 import Cardano.Chain.Common
     ( unsafeGetLovelace )
+import Cardano.Ledger.Alonzo
+    ( AlonzoScript )
 import Cardano.Ledger.Shelley.API
     ( StrictMaybe (SJust, SNothing) )
 import Cardano.Wallet.Read.Eras
@@ -67,7 +69,7 @@ getOutputs = EraFun
     , allegraFun = \(Outputs os) -> K . fmap fromAllegraTxOut $ toList os
     , maryFun = \(Outputs os) -> K . fmap fromMaryTxOut $ toList os
     , alonzoFun = \(Outputs os) -> K . fmap fromAlonzoTxOut $ toList os
-    , babbageFun = \(Outputs os) -> K . fmap fromBabbageTxOut $ toList os
+    , babbageFun = \(Outputs os) -> K . fmap (fst . fromBabbageTxOut) $ toList os
     , conwayFun = \(Outputs os) -> K . fmap fromConwayTxOut $ toList os
     }
 
@@ -97,9 +99,9 @@ fromAlonzoTxOut (Alonzo.AlonzoTxOut addr value _) =
     fromCardanoValue $ Cardano.fromMaryValue value
 
 fromBabbageTxOut
-    :: Babbage.TxOut StandardBabbage
-    -> (W.TxOut, Maybe (Babbage.Script (Babbage.BabbageEra SL.StandardCrypto)))
-fromBabbageTxOut (Babbage.TxOut addr value _datum refScript) =
+    :: Babbage.BabbageTxOut StandardBabbage
+    -> (W.TxOut, Maybe (AlonzoScript (Babbage.BabbageEra SL.StandardCrypto)))
+fromBabbageTxOut (Babbage.BabbageTxOut addr value _datum refScript) =
     ( W.TxOut (fromShelleyAddress addr) $
       fromCardanoValue $ Cardano.fromMaryValue value
     , case refScript of

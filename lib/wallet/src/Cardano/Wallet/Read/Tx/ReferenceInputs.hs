@@ -60,7 +60,7 @@ getEraReferenceInputs
         , allegraFun = \_ -> ReferenceInputs ()
         , maryFun = \_ -> ReferenceInputs ()
         , alonzoFun = \_ -> ReferenceInputs ()
-        , babbageFun = onTx $ \(AL.ValidatedTx b _ _ _) -> getReferenceInputs b
+        , babbageFun = onTx $ \(AL.AlonzoTx b _ _ _) -> getReferenceInputs b
         }
 
 getReferenceInputs
