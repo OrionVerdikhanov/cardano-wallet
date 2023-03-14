@@ -586,9 +586,9 @@ castConwayTxOut (TxOutInRecentEra addr val datum mscript) =
 
 castBabbageTxOut
     :: TxOutInRecentEra
-    -> TxOut LatestLedgerEra
-castBabbageTxOut (TxOutInRecentEra addr val datum mscript) =
-    Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
+    -> Babbage.BabbageTxOut (Babbage.BabbageEra StandardCrypto)
+castBabbageTxOut (TxOutInRecentEra _addr _val _datum _mscript) = undefined -- TODO
+    -- Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
 
 downcastTxOut
     :: TxOutInRecentEra
@@ -656,6 +656,7 @@ isBelowMinimumCoinForTxOut era pp out =
     actualCoin = getCoin era out
 
     getCoin :: RecentEra era -> TxOut (ShelleyLedgerEra era) -> Coin
+    getCoin RecentEraConway (Babbage.BabbageTxOut _ val _ _) = coin val
     getCoin RecentEraBabbage (Babbage.BabbageTxOut _ val _ _) = coin val
     getCoin RecentEraAlonzo (Alonzo.AlonzoTxOut _ val _) = coin val
 
@@ -706,6 +707,9 @@ modifyTxOutputs
     -> Core.TxBody (ShelleyLedgerEra era)
     -> Core.TxBody (ShelleyLedgerEra era)
 modifyTxOutputs era f body = case era of
+    RecentEraConway -> body
+        { Babbage.outputs = mapSized f <$> Babbage.outputs body
+        }
     RecentEraBabbage -> body
         { Babbage.outputs = mapSized f <$> Babbage.outputs body
         }
