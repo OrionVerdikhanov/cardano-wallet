@@ -145,6 +145,8 @@ import Cardano.Ledger.Alonzo.Data
     ( BinaryData, Datum (..) )
 import Cardano.Ledger.Alonzo.Scripts
     ( AlonzoScript (..) )
+import Cardano.Ledger.BaseTypes
+    ( maybeToStrictMaybe )
 import Cardano.Ledger.Coin
     ( Coin (..) )
 import Cardano.Ledger.Crypto
@@ -153,6 +155,7 @@ import Cardano.Ledger.Era
     ( Crypto )
 import Cardano.Ledger.Mary
     ( MaryValue )
+
 import Cardano.Ledger.SafeHash
     ( SafeHash, extractHash, unsafeMakeSafeHash )
 import Cardano.Ledger.Serialization
@@ -180,9 +183,7 @@ import Data.Maybe.Strict
 import Data.Typeable
     ( Typeable )
 import Ouroboros.Consensus.Shelley.Eras
-    ( StandardBabbage )
-import Test.Cardano.Ledger.Alonzo.Examples.Consensus
-    ( StandardAlonzo )
+    ( StandardAlonzo, StandardBabbage, StandardConway )
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Byron as Cardano
@@ -209,9 +210,9 @@ import qualified Data.Map as Map
 -- Eras
 --------------------------------------------------------------------------------
 
-type LatestEra = BabbageEra
+type LatestEra = ConwayEra
 
-type LatestLedgerEra = StandardBabbage
+type LatestLedgerEra = StandardConway
 
 --------------------------------------------------------------------------------
 -- RecentEra
@@ -373,6 +374,9 @@ modifyTxOutValue
     -> (MaryValue StandardCrypto -> MaryValue StandardCrypto)
     -> TxOut (ShelleyLedgerEra era)
     -> TxOut (ShelleyLedgerEra era)
+modifyTxOutValue RecentEraConway f (Babbage.BabbageTxOut addr val dat script) =
+    withStandardCryptoConstraint RecentEraConway $
+        Babbage.BabbageTxOut addr (f val) dat script
 modifyTxOutValue RecentEraBabbage f (Babbage.BabbageTxOut addr val dat script) =
     withStandardCryptoConstraint RecentEraBabbage $
         Babbage.BabbageTxOut addr (f val) dat script
@@ -392,6 +396,7 @@ txOutValue
     :: RecentEra era
     -> TxOut (ShelleyLedgerEra era)
     -> MaryValue StandardCrypto
+txOutValue RecentEraConway (Babbage.BabbageTxOut _ val _ _) = val
 txOutValue RecentEraBabbage (Babbage.BabbageTxOut _ val _ _) = val
 txOutValue RecentEraAlonzo (Alonzo.AlonzoTxOut _ val _) = val
 
@@ -415,7 +420,7 @@ scriptFromCardanoScriptInAnyLang
     . fromMaybe (error "all valid scripts should be valid in latest era")
     . Cardano.toScriptInEra latestEra
   where
-    latestEra = Cardano.BabbageEra
+    latestEra = Cardano.ConwayEra
 
 -- | NOTE: The roundtrip
 -- @
@@ -432,7 +437,7 @@ scriptToCardanoScriptInAnyLang =
     . Cardano.fromShelleyBasedScript latestEra
   where
     rewrap (Cardano.ScriptInEra _ s) = Cardano.toScriptInAnyLang s
-    latestEra = Cardano.ShelleyBasedEraBabbage
+    latestEra = Cardano.ShelleyBasedEraConway
 
 -- | NOTE: The roundtrip
 -- @
@@ -569,17 +574,21 @@ unwrapTxOutInRecentEra
     -> TxOutInRecentEra
     -> Either ErrInvalidTxOutInEra (TxOut (ShelleyLedgerEra era))
 unwrapTxOutInRecentEra era recentEraTxOut = case era of
-    RecentEraBabbage -> pure $ castTxOut recentEraTxOut
+    RecentEraConway -> pure $ castTxOut recentEraTxOut
+    RecentEraBabbage -> pure $ castBabbageTxOut recentEraTxOut
     RecentEraAlonzo -> downcastTxOut recentEraTxOut
 
 castTxOut
     :: TxOutInRecentEra
-    -> TxOut (ShelleyLedgerEra BabbageEra)
+    -> TxOut (ShelleyLedgerEra ConwayEra)
 castTxOut (TxOutInRecentEra addr val datum mscript) =
-    (Babbage.BabbageTxOut addr val datum (toStrict mscript))
-  where
-    toStrict (Just a) = SJust a
-    toStrict Nothing = SNothing
+    Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
+
+castBabbageTxOut
+    :: TxOutInRecentEra
+    -> Babbage.BabbageTxOut (ShelleyLedgerEra BabbageEra)
+castBabbageTxOut (TxOutInRecentEra addr val datum mscript) =
+    Babbage.BabbageTxOut addr val datum (maybeToStrictMaybe mscript)
 
 downcastTxOut
     :: TxOutInRecentEra
