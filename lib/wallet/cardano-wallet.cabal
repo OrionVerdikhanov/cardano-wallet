@@ -318,6 +318,7 @@ library
     Cardano.Wallet.Read.Primitive.Tx.Alonzo
     Cardano.Wallet.Read.Primitive.Tx.Babbage
     Cardano.Wallet.Read.Primitive.Tx.Byron
+    Cardano.Wallet.Read.Primitive.Tx.Conway
     Cardano.Wallet.Read.Primitive.Tx.Features.Certificates
     Cardano.Wallet.Read.Primitive.Tx.Features.CollateralInputs
     Cardano.Wallet.Read.Primitive.Tx.Features.CollateralOutputs

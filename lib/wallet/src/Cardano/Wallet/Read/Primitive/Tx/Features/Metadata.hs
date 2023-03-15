@@ -15,6 +15,7 @@ module Cardano.Wallet.Read.Primitive.Tx.Features.Metadata
     , fromMaryMetadata
     , fromAlonzoMetadata
     , fromBabbageMetadata
+    , fromConwayMetadata
     )
     where
 
