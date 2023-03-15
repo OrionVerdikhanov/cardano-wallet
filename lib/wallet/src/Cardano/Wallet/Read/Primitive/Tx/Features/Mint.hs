@@ -136,7 +136,8 @@ babbageMint ::
         ~ Alonzo.AlonzoScript (BabbageEra StandardCrypto)
     , Crypto era ~ StandardCrypto
     )
-    => SL.MaryValue StandardCrypto
+    => Set (SL.TxIn StandardCrypto)
+    -> SL.MaryValue StandardCrypto
     -> AL.TxWitness era
     -> (TokenMapWithScripts, TokenMapWithScripts)
 babbageMint refInps val wits =
