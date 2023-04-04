@@ -173,6 +173,7 @@ steps:
   - label: 'Build package (macOS)'
     depends_on: trigger-macos-package
     key: build-macos
+    if: '(build.branch == "master")'
     command: nix build --max-silent-time 0 --max-jobs 1 -o result/macos-intel .#ci.artifacts.macos-intel.release
     artifact_paths: [ "./result/macos-intel/**" ]
     agents:
