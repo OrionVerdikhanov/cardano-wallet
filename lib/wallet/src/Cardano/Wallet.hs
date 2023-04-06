@@ -2889,8 +2889,7 @@ delegationFee
 delegationFee db@DBLayer{atomically, walletsDB} netLayer
     txLayer ti era changeAddressGen walletId = do
     WriteTx.withRecentEra era $ \(recentEra :: WriteTx.RecentEra era) -> do
-        protocolParams <- toBalanceTxPParams
-            <$> liftIO (currentProtocolParameters netLayer)
+        protocolParams <- liftIO (currentProtocolParameters netLayer)
         wallet <- lift . atomically $ readDBVar walletsDB >>= \wallets ->
             case Map.lookup walletId wallets of
                 Nothing -> liftIO . throwIO
@@ -2903,7 +2902,7 @@ delegationFee db@DBLayer{atomically, walletsDB} netLayer
         let unsignedTxBody = either (error .show) id $
                 mkUnsignedTransaction txLayer @era
                     (unsafeShelleyOnlyGetRewardXPub (getState wallet))
-                    (fst protocolParams)
+                    protocolParams
                     defaultTransactionCtx
                     -- It would seem that we should add a delegation action
                     -- to the partial tx we construct, this was not done
@@ -2921,7 +2920,7 @@ delegationFee db@DBLayer{atomically, walletsDB} netLayer
                     balanceTransaction @_ @_ @s
                         nullTracer
                         (Write.allKeyPaymentCredentials txLayer)
-                        protocolParams
+                        (toBalanceTxPParams protocolParams)
                         pureTimeInterpreter
                         utxoIndex
                         changeAddressGen
