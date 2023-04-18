@@ -274,7 +274,7 @@ newDBFactory tr defaultFieldValues ti = \case
                     Just db -> pure (m, db)
                     Nothing -> do
                         let tr' = contramap (MsgWalletDB "") tr
-                        (_cleanup, db) <- newDBLayerInMemory tr' ti
+                        (_cleanup, db) <- newDBLayerInMemory tr' ti wid
                         pure (Map.insert wid db m, db)
                 action db
             , removeDatabase = \wid -> do
@@ -293,6 +293,7 @@ newDBFactory tr defaultFieldValues ti = \case
                 defaultFieldValues
                 (databaseFile wid)
                 ti
+                wid
                 action
             , removeDatabase = \wid -> do
                 let widp = pretty wid
@@ -458,11 +459,15 @@ withDBLayerFromDBOpen
     -- ^ Logging object
     -> TimeInterpreter IO
     -- ^ Time interpreter for slot to time conversions
+    -> W.WalletId
+    -- ^ Wallet ID of the database
     -> (DBLayer IO s k -> IO a)
+    -- ^ Action to run.
     -> DBOpen (SqlPersistT IO) IO s k
+    -- ^ Already opened database.
     -> IO a
-withDBLayerFromDBOpen  tr ti action DBOpen{atomically}=
-    newDBLayer tr ti (SqliteContext atomically) >>= action
+withDBLayerFromDBOpen  tr ti wid action DBOpen{atomically} =
+    newDBLayer tr ti wid (SqliteContext atomically) >>= action
 
 -- | Runs an action with a connection to the SQLite database.
 --
@@ -477,19 +482,21 @@ withDBLayer
         , WalletKey k
         )
     => Tracer IO WalletDBLog
-       -- ^ Logging object
+       -- ^ Logging object.
     -> DefaultFieldValues
        -- ^ Default database field values, used during migration.
     -> FilePath
        -- ^ Path to database file
     -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
+       -- ^ Time interpreter for slot to time conversions.
+    -> W.WalletId
+         -- ^ Wallet ID of the database.
     -> (DBLayer IO s k -> IO a)
        -- ^ Action to run.
     -> IO a
-withDBLayer tr defaultFieldValues dbFile ti action =
+withDBLayer tr defaultFieldValues dbFile ti wid action =
     withDBOpenFromFile tr defaultFieldValues dbFile
-        $ withDBLayerFromDBOpen tr ti action
+        $ withDBLayerFromDBOpen tr ti wid action
 
 -- | Runs an IO action with a new 'DBLayer' backed by a sqlite in-memory
 -- database.
@@ -499,13 +506,16 @@ withDBLayerInMemory
         , PersistPrivateKey (k 'RootK)
         )
     => Tracer IO WalletDBLog
-       -- ^ Logging object
+       -- ^ Logging object.
     -> TimeInterpreter IO
        -- ^ Time interpreter for slot to time conversions
+    -> W.WalletId
+       -- ^ Wallet ID of the database.
     -> (DBLayer IO s k -> IO a)
+       -- ^ Action to run.
     -> IO a
-withDBLayerInMemory tr ti action
-    = bracket (newDBLayerInMemory tr ti) fst (action . snd)
+withDBLayerInMemory tr ti wid action = bracket
+    (newDBLayerInMemory tr ti wid) fst (action . snd)
 
 -- | Creates a 'DBLayer' backed by a sqlite in-memory database.
 --
@@ -517,15 +527,17 @@ newDBLayerInMemory
         , PersistPrivateKey (k 'RootK)
         )
     => Tracer IO WalletDBLog
-       -- ^ Logging object
+       -- ^ Logging object.
     -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
+       -- ^ Time interpreter for slot to time conversions.
+    -> W.WalletId
+       -- ^ Wallet ID of the database.
     -> IO (IO (), DBLayer IO s k)
-newDBLayerInMemory tr ti = do
+newDBLayerInMemory tr ti wid = do
     let tr' = contramap MsgDB tr
     (destroy, ctx) <-
         newInMemorySqliteContext tr' [] migrateAll ForeignKeysEnabled
-    db <- newDBLayer tr ti ctx
+    db <- newDBLayer tr ti wid ctx
     pure (destroy, db)
 
 -- | What to do with regards to caching. This is useful to disable caching in
@@ -554,6 +566,7 @@ newDBLayer
        -- ^ Logging
     -> TimeInterpreter IO
        -- ^ Time interpreter for slot to time conversions
+    -> W.WalletId
     -> SqliteContext
        -- ^ A (thread-)safe wrapper for query execution.
     -> IO (DBLayer IO s k)
@@ -571,11 +584,12 @@ newDBLayerWith
        -- ^ Logging
     -> TimeInterpreter IO
        -- ^ Time interpreter for slot to time conversions
+    -> W.WalletId
     -> SqliteContext
        -- ^ A (thread-)safe wrapper for query execution.
     -> IO (DBLayer IO s k)
-newDBLayerWith cb tr ti ctx
-    = newQueryLock ctx >>= newDBLayerWith' @s @k cb tr ti
+newDBLayerWith cb tr ti wid ctx
+    = newQueryLock ctx >>= newDBLayerWith' @s @k cb tr ti wid
 
 -- | Like 'newDBLayer', but allows to explicitly specify the caching behavior.
 newDBLayerWith'
@@ -589,10 +603,11 @@ newDBLayerWith'
        -- ^ Logging
     -> TimeInterpreter IO
        -- ^ Time interpreter for slot to time conversions
+    -> W.WalletId
     -> DBOpen (SqlPersistT IO) IO s k
        -- ^ A (thread-)safe wrapper for query execution.
     -> IO (DBLayer IO s k)
-newDBLayerWith' _cacheBehavior _tr ti DBOpen{atomically=runQuery} = mdo
+newDBLayerWith' _cacheBehavior _tr ti wid_ DBOpen{atomically=runQuery} = mdo
     -- FIXME LATER during ADP-1043:
     --   Remove the 'NoCache' behavior, we cannot get it back.
     --   This will affect read benchmarks, they will need to benchmark
@@ -805,7 +820,7 @@ newDBLayerWith' _cacheBehavior _tr ti DBOpen{atomically=runQuery} = mdo
 
     let atomically_ = runQuery
 
-    pure $ mkDBLayerFromParts ti DBLayerCollection{..}
+    pure $ mkDBLayerFromParts ti wid_ DBLayerCollection{..}
 
 mkDecorator
     :: QueryStoreTxWalletsHistory
