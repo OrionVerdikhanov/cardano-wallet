@@ -658,14 +658,14 @@ newDBLayerWith' _cacheBehavior _tr ti wid_ DBOpen{atomically=runQuery} = mdo
         -----------------------------------------------------------------------}
     let
       dbWallets = DBWallets
-        { initializeWallet_ = \wid cp meta txs gp -> do
+        { initializeWallet_ = \cp meta txs gp -> do
             res <- lift $ runExceptT $ getWalletId_ dbWallets
             case res of
                 Left ErrWalletNotInitialized -> lift $ do
-                    insert_ $ mkWalletEntity wid meta gp
-                    insertCheckpointGenesis wid cp
+                    insert_ $ mkWalletEntity wid_ meta gp
+                    insertCheckpointGenesis wid_ cp
                     updateS (store transactionsQS) Nothing $
-                                ExpandTxWalletsHistory wid txs
+                                ExpandTxWalletsHistory wid_ txs
                 Right _ -> throwE ErrWalletAlreadyInitialized
 
         , readGenesisParameters_ = selectGenesisParameters

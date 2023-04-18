@@ -635,7 +635,6 @@ txHistoryFixture  bSize nAssets range db@DBLayer{..}= do
 walletFixture :: DBLayerBench -> IO ()
 walletFixture DBLayer{initializeWallet, atomically} = do
     atomically $ unsafeRunExceptT $ initializeWallet
-        testWid
         testCp
         testMetadata
         mempty
@@ -644,7 +643,6 @@ walletFixture DBLayer{initializeWallet, atomically} = do
 walletFixtureByron :: DBLayerBenchByron -> IO ()
 walletFixtureByron DBLayer{initializeWallet, atomically} = do
     atomically $ unsafeRunExceptT $ initializeWallet
-        testWid
         testCpByron
         testMetadata
         mempty
