@@ -62,7 +62,9 @@ import Cardano.Wallet.DB.Layer
     , newDBFactory
     , newDBLayerInMemory
     , withDBLayer
+    , withDBLayerFromDBOpen
     , withDBLayerInMemory
+    , withDBOpenFromFile
     )
 import Cardano.Wallet.DB.Properties
     ( properties )
@@ -1151,8 +1153,8 @@ withDBLayerFromCopiedFile
     -> IO ([WalletDBLog], a)
         -- ^ (logs, result of the action)
 withDBLayerFromCopiedFile dbName action = withinCopiedFile dbName
-    $ \path tr->
-        withDBLayer tr defaultFieldValues path dummyTimeInterpreter action
+    $ \path tr -> withDBOpenFromFile tr defaultFieldValues path $
+        withDBLayerFromDBOpen @k @s tr dummyTimeInterpreter action
 
 withinCopiedFile
     :: FilePath

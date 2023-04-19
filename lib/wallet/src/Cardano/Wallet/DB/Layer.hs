@@ -38,6 +38,8 @@ module Cardano.Wallet.DB.Layer
     -- * Migration Support
     , DefaultFieldValues (..)
     , newDBOpenInMemory
+    , withDBLayerFromDBOpen
+    , retrieveWalletId
 
     ) where
 
@@ -154,7 +156,7 @@ import Control.DeepSeq
 import Control.Exception
     ( evaluate, throw )
 import Control.Monad
-    ( forM, unless, (<=<) )
+    ( forM, unless )
 import Control.Monad.IO.Class
     ( MonadIO (..) )
 import Control.Monad.Trans
@@ -438,9 +440,29 @@ newQueryLock SqliteContext{runQuery} = do
     pure $ DBOpen
         { atomically = withMVar queryLock . const . runQuery }
 
+-- | Retrieve the wallet id from the database if it's initialized.
+retrieveWalletId :: DBOpen (SqlPersistT IO) IO s k -> IO (Maybe W.WalletId)
+retrieveWalletId DBOpen{atomically} =
+    atomically
+        $ fmap (walId . entityVal)
+            <$> selectFirst [] []
+
 {-------------------------------------------------------------------------------
     DBLayer
 -------------------------------------------------------------------------------}
+
+withDBLayerFromDBOpen
+    :: forall k s a
+     . (PersistAddressBook s, PersistPrivateKey (k 'RootK))
+    =>Tracer IO WalletDBLog
+    -- ^ Logging object
+    -> TimeInterpreter IO
+    -- ^ Time interpreter for slot to time conversions
+    -> (DBLayer IO s k -> IO a)
+    -> DBOpen (SqlPersistT IO) IO s k
+    -> IO a
+withDBLayerFromDBOpen  tr ti action DBOpen{atomically}=
+    newDBLayer tr ti (SqliteContext atomically) >>= action
 
 -- | Runs an action with a connection to the SQLite database.
 --
@@ -465,13 +487,9 @@ withDBLayer
     -> (DBLayer IO s k -> IO a)
        -- ^ Action to run.
     -> IO a
-withDBLayer tr defaultFieldValues dbFile ti action = do
-    let trDB = contramap MsgDB tr
-    let manualMigrations = migrateManually trDB (Proxy @k) defaultFieldValues
-    let autoMigrations   = migrateAll
-    withConnectionPool trDB dbFile $ \pool -> do
-        res <- newSqliteContext trDB pool manualMigrations autoMigrations
-        either throwIO (action <=< newDBLayerWith CacheLatestCheckpoint tr ti) res
+withDBLayer tr defaultFieldValues dbFile ti action =
+    withDBOpenFromFile tr defaultFieldValues dbFile
+        $ withDBLayerFromDBOpen tr ti action
 
 -- | Runs an IO action with a new 'DBLayer' backed by a sqlite in-memory
 -- database.
@@ -486,7 +504,8 @@ withDBLayerInMemory
        -- ^ Time interpreter for slot to time conversions
     -> (DBLayer IO s k -> IO a)
     -> IO a
-withDBLayerInMemory tr ti action = bracket (newDBLayerInMemory tr ti) fst (action . snd)
+withDBLayerInMemory tr ti action
+    = bracket (newDBLayerInMemory tr ti) fst (action . snd)
 
 -- | Creates a 'DBLayer' backed by a sqlite in-memory database.
 --
@@ -540,7 +559,6 @@ newDBLayer
     -> IO (DBLayer IO s k)
 newDBLayer = newDBLayerWith @s @k CacheLatestCheckpoint
 
-{- HLINT ignore newDBLayerWith "Redundant <$>" -}
 -- | Like 'newDBLayer', but allows to explicitly specify the caching behavior.
 newDBLayerWith
     :: forall s k.
@@ -556,7 +574,25 @@ newDBLayerWith
     -> SqliteContext
        -- ^ A (thread-)safe wrapper for query execution.
     -> IO (DBLayer IO s k)
-newDBLayerWith _cacheBehavior _tr ti SqliteContext{runQuery} = mdo
+newDBLayerWith cb tr ti ctx
+    = newQueryLock ctx >>= newDBLayerWith' @s @k cb tr ti
+
+-- | Like 'newDBLayer', but allows to explicitly specify the caching behavior.
+newDBLayerWith'
+    :: forall s k.
+        ( PersistAddressBook s
+        , PersistPrivateKey (k 'RootK)
+        )
+    => CacheBehavior
+       -- ^ Option to disable caching.
+    -> Tracer IO WalletDBLog
+       -- ^ Logging
+    -> TimeInterpreter IO
+       -- ^ Time interpreter for slot to time conversions
+    -> DBOpen (SqlPersistT IO) IO s k
+       -- ^ A (thread-)safe wrapper for query execution.
+    -> IO (DBLayer IO s k)
+newDBLayerWith' _cacheBehavior _tr ti DBOpen{atomically=runQuery} = mdo
     -- FIXME LATER during ADP-1043:
     --   Remove the 'NoCache' behavior, we cannot get it back.
     --   This will affect read benchmarks, they will need to benchmark
@@ -566,11 +602,6 @@ newDBLayerWith _cacheBehavior _tr ti SqliteContext{runQuery} = mdo
     --   Handle the case where loading the database fails.
     walletsDB <- runQuery $ loadDBVar mkStoreWallets
     let transactionsQS = newQueryStoreTxWalletsHistory
-
-    -- NOTE
-    -- The cache will not work properly unless 'atomically' is protected by a
-    -- mutex (queryLock), which means no concurrent queries.
-    queryLock <- newMVar () -- fixme: ADP-586
 
     -- Insert genesis checkpoint into the DBVar.
     -- Throws an internal error if the checkpoint is not actually at genesis.
@@ -772,7 +803,7 @@ newDBLayerWith _cacheBehavior _tr ti SqliteContext{runQuery} = mdo
                                      ACID Execution
         -----------------------------------------------------------------------}
 
-    let atomically_ = withMVar queryLock . const . runQuery
+    let atomically_ = runQuery
 
     pure $ mkDBLayerFromParts ti DBLayerCollection{..}
 
