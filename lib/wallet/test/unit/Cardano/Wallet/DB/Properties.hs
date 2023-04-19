@@ -151,8 +151,8 @@ properties withFreshDB = describe "DB.Properties" $ do
             $ property
             $ prop_readAfterPut
                 testOnLayer
-                (\DBLayer{..} wid -> mapExceptT atomically . putCheckpoint)
-                (\DBLayer{..} -> atomically . readCheckpoint)
+                (\DBLayer{..} _wid -> mapExceptT atomically . putCheckpoint)
+                (\DBLayer{..} _wid -> atomically readCheckpoint)
         it "Wallet Metadata"
             $ property
             $ prop_readAfterPut
@@ -188,8 +188,8 @@ properties withFreshDB = describe "DB.Properties" $ do
             $ property
             $ prop_putBeforeInit
                 withFreshDB
-                (\DBLayer{..} wid -> mapExceptT atomically . putCheckpoint)
-                (\DBLayer{..} -> atomically . readCheckpoint)
+                (\DBLayer{..} _wid -> mapExceptT atomically . putCheckpoint)
+                (\DBLayer{..} _wid -> atomically readCheckpoint)
                 Nothing
         it "Wallet Metadata"
             $ property
@@ -228,14 +228,14 @@ properties withFreshDB = describe "DB.Properties" $ do
                 testOnLayer
                 (\DBLayer{..} wid -> mapExceptT atomically . putWalletMeta wid)
                 readTxHistory_
-                (\DBLayer{..} -> atomically . readCheckpoint)
+                (\DBLayer{..} _ -> atomically readCheckpoint)
                 (\DBLayer{..} -> atomically . readPrivateKey)
         it "Tx History vs Checkpoint & Wallet Metadata & Private Key"
             $ property
             $ prop_isolation
                 testOnLayer
                 putTxHistory_
-                (\DBLayer{..} -> atomically . readCheckpoint)
+                (\DBLayer{..} _ -> atomically readCheckpoint)
                 (\DBLayer{..} -> atomically . readWalletMeta)
                 (\DBLayer{..} -> atomically . readPrivateKey)
 
@@ -246,8 +246,8 @@ properties withFreshDB = describe "DB.Properties" $ do
             $ checkCoverage
             $ prop_sequentialPut
                 testOnLayer
-                (\DBLayer{..} wid -> mapExceptT atomically . putCheckpoint)
-                (\DBLayer{..} -> atomically . readCheckpoint)
+                (\DBLayer{..} _wid -> mapExceptT atomically . putCheckpoint)
+                (\DBLayer{..} _-> atomically readCheckpoint)
                 lastMay
                 . sortOn (currentTip . unShowFmt)
         it "Wallet Metadata"
@@ -584,7 +584,7 @@ prop_rollbackCheckpoint test (InitialCheckpoint cp0) (MockChain chain) = monadic
                 $ atomically
                 $ unsafeRunExceptT
                 $ rollbackTo testWid (toSlot $ chainPointFromBlockHeader tip)
-        cp <- run $ atomically $ readCheckpoint testWid
+        cp <- run $ atomically readCheckpoint
         let str = maybe "∅" pretty cp
         monitor $ counterexample ("Checkpoint after rollback: \n" <> str)
         assert (ShowFmt cp == ShowFmt (pure point))

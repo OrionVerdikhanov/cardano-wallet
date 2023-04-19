@@ -630,10 +630,9 @@ newDBLayerWith' _cacheBehavior _tr ti wid_ DBOpen{atomically=runQuery} = mdo
 
     -- Retrieve the latest checkpoint from the DBVar
     let readCheckpoint
-            :: W.WalletId
-            -> SqlPersistT IO (Maybe (W.Wallet s))
-        readCheckpoint wid =
-            fmap getLatest . Map.lookup wid <$> readDBVar walletsDB
+            ::  SqlPersistT IO (Maybe (W.Wallet s))
+        readCheckpoint =
+            fmap (getLatest . snd). Map.lookupMin <$> readDBVar walletsDB
 
     let pruneCheckpoints
             :: W.WalletId
@@ -780,7 +779,7 @@ newDBLayerWith' _cacheBehavior _tr ti wid_ DBOpen{atomically=runQuery} = mdo
 
     let prune_ wid epochStability finalitySlot = do
             ExceptT $ do
-                readCheckpoint wid >>= \case
+                readCheckpoint >>= \case
                     Nothing -> pure $ Left ErrWalletNotInitialized
                     Just cp -> Right <$> do
                         let tip = cp ^. #currentTip
