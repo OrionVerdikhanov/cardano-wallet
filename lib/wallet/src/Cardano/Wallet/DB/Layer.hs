@@ -21,26 +21,21 @@ module Cardano.Wallet.DB.Layer
     , findDatabases
     , DBFactoryLog (..)
 
-    -- * Internal implementation
+    -- * Open a database
     , withDBOpenFromFile
+    , newDBOpenInMemory
+    , retrieveWalletId
+    , WalletDBLog (..)
+    , DefaultFieldValues (..)
+
+    -- * Database for a specific 'WalletId'
     , withDBLayer
     , withDBLayerInMemory
-    , WalletDBLog (..)
-    , CacheBehavior (..)
-
-    -- * Unbracketed internal implementation
-    , newDBLayerWith
     , newDBLayerInMemory
+    , withDBLayerFromDBOpen
 
     -- * Interfaces
     , PersistAddressBook (..)
-
-    -- * Migration Support
-    , DefaultFieldValues (..)
-    , newDBOpenInMemory
-    , withDBLayerFromDBOpen
-    , retrieveWalletId
-
     ) where
 
 import Prelude
@@ -290,7 +285,7 @@ newDBFactory tr defaultFieldValues ti = \case
         pure DBFactory
             { withDatabase = \wid action -> withRef refs wid $ withDBLayer
                 (contramap (MsgWalletDB (databaseFile wid)) tr)
-                defaultFieldValues
+                (Just defaultFieldValues)
                 (databaseFile wid)
                 ti
                 action
@@ -396,8 +391,9 @@ withDBOpenFromFile
      . WalletKey k
     => Tracer IO WalletDBLog
        -- ^ Logging object
-    -> DefaultFieldValues
-       -- ^ Default database field values, used during migration.
+    -> Maybe DefaultFieldValues
+       -- ^ Default database field values, used during manual migration.
+       -- Use 'Nothing' to skip manual migrations.
     -> FilePath
        -- ^ Path to database file
     -> (DBOpen (SqlPersistT IO) IO s k -> IO a)
@@ -405,7 +401,8 @@ withDBOpenFromFile
     -> IO a
 withDBOpenFromFile tr defaultFieldValues dbFile action = do
     let trDB = contramap MsgDB tr
-    let manualMigrations = migrateManually trDB (Proxy @k) defaultFieldValues
+    let manualMigrations =
+            maybe [] (migrateManually trDB (Proxy @k)) defaultFieldValues
     let autoMigrations   = migrateAll
     withConnectionPool trDB dbFile $ \pool -> do
         res <- newSqliteContext trDB pool manualMigrations autoMigrations
@@ -454,15 +451,13 @@ retrieveWalletId DBOpen{atomically} =
 withDBLayerFromDBOpen
     :: forall k s a
      . (PersistAddressBook s, PersistPrivateKey (k 'RootK))
-    =>Tracer IO WalletDBLog
-    -- ^ Logging object
-    -> TimeInterpreter IO
+    => TimeInterpreter IO
     -- ^ Time interpreter for slot to time conversions
     -> (DBLayer IO s k -> IO a)
     -> DBOpen (SqlPersistT IO) IO s k
     -> IO a
-withDBLayerFromDBOpen  tr ti action DBOpen{atomically}=
-    newDBLayer tr ti (SqliteContext atomically) >>= action
+withDBLayerFromDBOpen ti action dbopen =
+    newDBLayerFromDBOpen ti dbopen >>= action
 
 -- | Runs an action with a connection to the SQLite database.
 --
@@ -478,8 +473,9 @@ withDBLayer
         )
     => Tracer IO WalletDBLog
        -- ^ Logging object
-    -> DefaultFieldValues
-       -- ^ Default database field values, used during migration.
+    -> Maybe DefaultFieldValues
+       -- ^ Default database field values, used during manual migration.
+       -- Use 'Nothing' to skip manual migrations.
     -> FilePath
        -- ^ Path to database file
     -> TimeInterpreter IO
@@ -489,7 +485,7 @@ withDBLayer
     -> IO a
 withDBLayer tr defaultFieldValues dbFile ti action =
     withDBOpenFromFile tr defaultFieldValues dbFile
-        $ withDBLayerFromDBOpen tr ti action
+        $ \dbopen -> newDBLayerFromDBOpen ti dbopen >>= action
 
 -- | Runs an IO action with a new 'DBLayer' backed by a sqlite in-memory
 -- database.
@@ -522,77 +518,23 @@ newDBLayerInMemory
        -- ^ Time interpreter for slot to time conversions
     -> IO (IO (), DBLayer IO s k)
 newDBLayerInMemory tr ti = do
-    let tr' = contramap MsgDB tr
-    (destroy, ctx) <-
-        newInMemorySqliteContext tr' [] migrateAll ForeignKeysEnabled
-    db <- newDBLayer tr ti ctx
+    (destroy, dbopen) <- newDBOpenInMemory tr
+    db <- newDBLayerFromDBOpen ti dbopen
     pure (destroy, db)
 
--- | What to do with regards to caching. This is useful to disable caching in
--- database benchmarks.
-data CacheBehavior
-    = NoCache
-    | CacheLatestCheckpoint
-    deriving (Eq, Show)
-
--- | Sets up a connection to the SQLite database.
---
--- Database migrations are run to create tables if necessary.
---
--- If the given file path does not exist, it will be created by the sqlite
--- library.
---
--- 'newDBLayer' will provide the actual 'DBLayer' implementation. It requires an
--- 'SqliteContext' which can be obtained from a database connection pool. This
--- is better initialized with 'withDBLayer'.
-newDBLayer
+-- | From a 'DBOpen', create a database which can store the state
+-- of one wallet with a specific 'WalletId'.
+newDBLayerFromDBOpen
     :: forall s k.
         ( PersistAddressBook s
         , PersistPrivateKey (k 'RootK)
         )
-    => Tracer IO WalletDBLog
-       -- ^ Logging
-    -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
-    -> SqliteContext
-       -- ^ A (thread-)safe wrapper for query execution.
-    -> IO (DBLayer IO s k)
-newDBLayer = newDBLayerWith @s @k CacheLatestCheckpoint
-
--- | Like 'newDBLayer', but allows to explicitly specify the caching behavior.
-newDBLayerWith
-    :: forall s k.
-        ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
-        )
-    => CacheBehavior
-       -- ^ Option to disable caching.
-    -> Tracer IO WalletDBLog
-       -- ^ Logging
-    -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
-    -> SqliteContext
-       -- ^ A (thread-)safe wrapper for query execution.
-    -> IO (DBLayer IO s k)
-newDBLayerWith cb tr ti ctx
-    = newQueryLock ctx >>= newDBLayerWith' @s @k cb tr ti
-
--- | Like 'newDBLayer', but allows to explicitly specify the caching behavior.
-newDBLayerWith'
-    :: forall s k.
-        ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
-        )
-    => CacheBehavior
-       -- ^ Option to disable caching.
-    -> Tracer IO WalletDBLog
-       -- ^ Logging
-    -> TimeInterpreter IO
+    => TimeInterpreter IO
        -- ^ Time interpreter for slot to time conversions
     -> DBOpen (SqlPersistT IO) IO s k
        -- ^ A (thread-)safe wrapper for query execution.
     -> IO (DBLayer IO s k)
-newDBLayerWith' _cacheBehavior _tr ti DBOpen{atomically=runQuery} = mdo
+newDBLayerFromDBOpen ti DBOpen{atomically=runQuery} = mdo
     -- FIXME LATER during ADP-1043:
     --   Remove the 'NoCache' behavior, we cannot get it back.
     --   This will affect read benchmarks, they will need to benchmark

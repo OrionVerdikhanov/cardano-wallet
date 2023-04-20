@@ -68,10 +68,9 @@ import Cardano.Startup
 import Cardano.Wallet.DB
     ( DBLayer (..) )
 import Cardano.Wallet.DB.Layer
-    ( CacheBehavior (..)
-    , PersistAddressBook
+    ( PersistAddressBook
     , WalletDBLog (..)
-    , newDBLayerWith
+    , withDBLayer
     )
 import Cardano.Wallet.DB.Sqlite.Schema
     ( migrateAll )
@@ -740,6 +739,7 @@ setupDB
     :: forall s k.
         ( PersistAddressBook s
         , PersistPrivateKey (k 'RootK)
+        , WalletKey k
         )
     => Tracer IO WalletDBLog
     -> IO (BenchEnv s k)
@@ -748,10 +748,7 @@ setupDB tr = do
     uncurry (BenchEnv destroyPool) <$> createPool
   where
     withSetup action = withTempSqliteFile $ \fp -> do
-        let trDB = contramap MsgDB tr
-        withConnectionPool trDB fp $ \pool -> do
-            ctx <- either throwIO pure =<< newSqliteContext trDB pool [] migrateAll
-            db <- newDBLayerWith NoCache tr singleEraInterpreter ctx
+        withDBLayer tr Nothing fp singleEraInterpreter $ \db ->
             action (fp, db)
 
 singleEraInterpreter :: TimeInterpreter IO
@@ -770,6 +767,7 @@ withCleanDB
     :: ( NFData c
        , PersistAddressBook s
        , PersistPrivateKey (k 'RootK)
+       , WalletKey k
        , NFData b
        )
     => Tracer IO WalletDBLog
