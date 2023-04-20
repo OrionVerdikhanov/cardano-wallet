@@ -240,7 +240,34 @@ fromSequence = flip insertMany empty
 -- @
 --
 fromMap :: Ord u => Map u TokenBundle -> UTxOIndex u
-fromMap = Map.foldlWithKey' (\i u b -> insertUnsafe u b i) empty
+fromMap m = UTxOIndex
+    { universe
+        = m
+    , balance
+        = m & F.fold
+    , indexAll
+        = m & invertMapWith extractAll
+    , indexSingletons
+        = m & invertMapWith extractSingletons
+    , indexPairs
+        = m & invertMapWith extractPairs
+    }
+  where
+    {-# INLINABLE extractAll #-}
+    extractAll :: TokenBundle -> [Asset]
+    extractAll = Set.toList . tokenBundleAssets
+
+    {-# INLINABLE extractSingletons #-}
+    extractSingletons :: TokenBundle -> [Asset]
+    extractSingletons b = case categorizeTokenBundle b of
+        BundleWithOneAsset a -> [a]
+        _otherwise -> []
+
+    {-# INLINABLE extractPairs #-}
+    extractPairs :: TokenBundle -> [Asset]
+    extractPairs b = case categorizeTokenBundle b of
+        BundleWithTwoAssets (a1, a2) -> [a1, a2]
+        _otherwise -> []
 
 --------------------------------------------------------------------------------
 -- Deconstruction
@@ -517,6 +544,7 @@ tokenBundleAssets :: TokenBundle -> Set Asset
 tokenBundleAssets b = Set.union
     (Set.fromList [AssetLovelace | TokenBundle.coin b /= mempty])
     (Set.map Asset (TokenBundle.getAssets b))
+{-# INLINABLE tokenBundleAssets #-}
 
 -- | Returns the number of assets associated with a given 'TokenBundle'.
 --
@@ -567,6 +595,7 @@ categorizeTokenBundle b = case F.toList bundleAssets of
     _        -> BundleWithMultipleAssets bundleAssets
   where
     bundleAssets = tokenBundleAssets b
+{-# INLINABLE categorizeTokenBundle #-}
 
 -- Inserts an entry, but without checking the following pre-condition:
 --
@@ -807,3 +836,28 @@ assetsConsistent i = and
     ]
   where
     balanceAssets = tokenBundleAssets (balance i)
+
+--------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
+
+-- | Inverts a 'Map' from keys to values.
+--
+-- Uses the given function to extract a set of keys from each value.
+--
+invertMapWith
+    :: (Ord k0, Ord k1)
+    => (v -> [k1])
+    -> Map k0 v
+    -> Map k1 (NonEmptySet k0)
+invertMapWith makeNewKeys m
+    = Map.mapMaybe (fmap NonEmptySet.fromSet Set.fromList)
+    $ Map.fromListWith unsafeCombine
+        [ (a, [u])
+        | (u, b) <- Map.toList m
+        , a <- makeNewKeys b
+        ]
+  where
+    {-# INLINABLE unsafeCombine #-}
+    unsafeCombine (a : _) as = a : as
+    unsafeCombine _ _ = error "invertMapWith: unsafeCombine"
