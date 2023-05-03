@@ -131,6 +131,12 @@ source-repository-package
      trace-resources
      trace-forward
 
+source-repository-package
+  type: git
+  location: https://github.com/jonathanknowles/monoidmap
+  tag: fe97965b91d8c2301441aedd2401d9b19f1e4125
+  --sha256: 133m63milf2g79ir3dq00m4504jsmi14n719067fqwdhvpz8d6iw
+
 -- -------------------------------------------------------------------------
 -- Constraints tweaking
 
