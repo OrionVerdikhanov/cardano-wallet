@@ -95,6 +95,8 @@ import Data.Map.Strict
     ( Map )
 import Data.Monoid.Cancellative
     ( Reductive ((</>)) )
+import Data.Monoid.Monus
+    ( Monus ((<\>)) )
 import Data.Ord
     ( comparing )
 import Data.Set
@@ -309,9 +311,7 @@ subtract (TokenBundle c1 m1) (TokenBundle c2 m2) =
 --
 difference :: TokenBundle -> TokenBundle -> TokenBundle
 difference (TokenBundle c1 m1) (TokenBundle c2 m2) =
-    TokenBundle
-        (Coin.difference c1 c2)
-        (TokenMap.difference m1 m2)
+    TokenBundle (c1 <\> c2) (m1 <\> m2)
 
 --------------------------------------------------------------------------------
 -- Quantities
