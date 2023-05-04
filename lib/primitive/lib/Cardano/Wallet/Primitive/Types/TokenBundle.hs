@@ -85,18 +85,16 @@ import Cardano.Wallet.Primitive.Types.TokenQuantity
     ( TokenQuantity (..) )
 import Control.DeepSeq
     ( NFData )
-import Control.Monad
-    ( guard )
 import Data.Bifunctor
     ( first )
-import Data.Functor
-    ( ($>) )
 import Data.Hashable
     ( Hashable )
 import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Map.Strict
     ( Map )
+import Data.Monoid.Cancellative
+    ( Reductive ((</>)) )
 import Data.Ord
     ( comparing )
 import Data.Set
@@ -288,7 +286,8 @@ add (TokenBundle c1 m1) (TokenBundle c2 m2) =
 -- bundle when compared with the `leq` function.
 --
 subtract :: TokenBundle -> TokenBundle -> Maybe TokenBundle
-subtract a b = guard (b `leq` a) $> unsafeSubtract a b
+subtract (TokenBundle c1 m1) (TokenBundle c2 m2) =
+    TokenBundle <$> (c1 </> c2) <*> (m1 </> m2)
 
 -- | Analogous to @Set.difference@, return the difference between two token
 -- maps.
