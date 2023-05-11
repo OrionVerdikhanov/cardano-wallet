@@ -303,7 +303,6 @@ data ErrBalanceTx
     | ErrBalanceTxInternalError ErrBalanceTxInternalError
     | ErrBalanceTxInputResolutionConflicts (NonEmpty (W.TxOut, W.TxOut))
     | ErrBalanceTxUnresolvedInputs (NonEmpty W.TxIn)
-    | ErrOldEraNotSupported Cardano.AnyCardanoEra
     deriving (Show, Eq)
 
 -- | A 'PartialTx' is an an unbalanced 'SealedTx' along with the necessary
