@@ -1839,7 +1839,7 @@ type MakeRewardAccountBuilder k =
 
 data ErrWriteTxEra
     = ErrOldEraNotSupported Cardano.AnyCardanoEra
-    | ErrTxNotInEra Write.AnyRecentEra
+    | ErrTxNotInNodeEra Write.AnyRecentEra
     deriving (Show, Eq)
 
 -- | Build, Sign, Submit transaction.
