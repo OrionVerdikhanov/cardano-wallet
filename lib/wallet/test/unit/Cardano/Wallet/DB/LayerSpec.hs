@@ -54,13 +54,7 @@ import Cardano.Mnemonic
 import Cardano.Wallet
     ( readWalletMeta )
 import Cardano.Wallet.Address.Derivation
-    ( Depth (..)
-    , DerivationType (..)
-    , Index
-    , PaymentAddress (..)
-    , PersistPrivateKey
-    , WalletKey
-    )
+    ( Depth (..), DerivationType (..), Index, PaymentAddress (..), WalletKey )
 import Cardano.Wallet.Address.Derivation.Byron
     ( ByronKey (..) )
 import Cardano.Wallet.Address.Derivation.Icarus
@@ -112,7 +106,7 @@ import Cardano.Wallet.DB.StateMachine
 import Cardano.Wallet.DummyTarget.Primitive.Types
     ( block0, dummyGenesisParameters, dummyTimeInterpreter )
 import Cardano.Wallet.Flavor
-    ( KeyOf )
+    ( KeyOf, StateWithAnyKey, StateWithKey )
 import Cardano.Wallet.Gen
     ( genMnemonic )
 import Cardano.Wallet.Logging
@@ -301,7 +295,7 @@ stateMachineSpec
      . ( PersistAddressBook s
        , TestConstraints s k
        , Typeable s
-       , k ~ KeyOf s
+       , StateWithKey s k
        )
     => Spec
 stateMachineSpec = describe ("State machine test (" ++ showState @s ++ ")") $ do
@@ -380,7 +374,7 @@ loggingSpec = withLoggingDB @(SeqState 'Mainnet ShelleyKey) $ do
 
 withLoggingDB
     :: ( PersistAddressBook s
-       , PersistPrivateKey (KeyOf s 'RootK)
+       , StateWithAnyKey s
        )
     => SpecWith (IO [DBLog], DBFresh IO s)
     -> Spec
@@ -817,7 +811,7 @@ prop_randomOpChunks
     :: ( Eq s
        , PersistAddressBook s
        , Show s
-       , PersistPrivateKey (KeyOf s 'RootK)
+       , StateWithAnyKey s
        , WalletKey (KeyOf s)
        )
     => NonEmptyList (Wallet s, WalletMetadata)
@@ -916,14 +910,14 @@ defaultFieldValues = DefaultFieldValues
 -- Note: Having helper with concrete key types reduces the need
 -- for type-application everywhere.
 withShelleyDBLayer
-    :: (PersistAddressBook s, PersistPrivateKey (KeyOf s 'RootK))
+    :: (PersistAddressBook s, StateWithAnyKey s)
     => (DBFresh IO s -> IO a)
     -> IO a
 withShelleyDBLayer = withDBFreshInMemory nullTracer dummyTimeInterpreter testWid
 
 withShelleyFileDBFresh
     :: ( PersistAddressBook s
-       , PersistPrivateKey (KeyOf s 'RootK)
+       , StateWithAnyKey s
        , WalletKey (KeyOf s)
        )
     => FilePath
@@ -1167,7 +1161,7 @@ manualMigrationsSpec = describe "Manual migrations" $ do
 withDBLayerFromCopiedFile
     :: forall k s a.
         ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithKey s k
         , WalletKey k
         , s ~ SeqState 'Mainnet k
         )
@@ -1178,7 +1172,7 @@ withDBLayerFromCopiedFile
     -> IO ([WalletDBLog], a)
         -- ^ (logs, result of the action)
 withDBLayerFromCopiedFile dbName action = withinCopiedFile dbName
-    $ \path tr -> withDBOpenFromFile tr (Just defaultFieldValues) path
+    $ \path tr -> withDBOpenFromFile @s @k tr (Just defaultFieldValues) path
     $ \db -> do
         mwid <- retrieveWalletId db
         case mwid of
@@ -1186,7 +1180,7 @@ withDBLayerFromCopiedFile dbName action = withinCopiedFile dbName
             Just wid -> do
                 let action' DBFresh{loadDBLayer} = do
                         unsafeRunExceptT loadDBLayer >>= action
-                withDBFreshFromDBOpen @k @s dummyTimeInterpreter wid action' db
+                withDBFreshFromDBOpen @s dummyTimeInterpreter wid action' db
 
 withinCopiedFile
     :: FilePath
@@ -1286,7 +1280,7 @@ testMigrationSeqStateDerivationPrefix
         ( s ~ SeqState 'Mainnet k
         , WalletKey k
         , PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithAnyKey s
         )
     => String
     -> ( Index 'Hardened 'PurposeK

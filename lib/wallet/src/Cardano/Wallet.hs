@@ -345,7 +345,7 @@ import Cardano.Wallet.Flavor
     , StateWithAnyKey
     , WalletFlavor (..)
     , WalletFlavorS (..)
-    , keyFlavorState
+    , keyFlavorOfState
     )
 import Cardano.Wallet.Logging
     ( BracketLog
@@ -3701,7 +3701,7 @@ defaultChangeAddressGen
 defaultChangeAddressGen arg =
     ChangeAddressGen
         (genChange arg)
-        (maxLengthAddressFor (keyFlavorState @s))
+        (maxLengthAddressFor (keyFlavorOfState @s))
 
 -- WARNING: Must never be used to create real transactions for submission to the
 -- blockchain as funds sent to a dummy change address would be irrecoverable.
@@ -3711,5 +3711,5 @@ dummyChangeAddressGen
     => ChangeAddressGen s
 dummyChangeAddressGen =
     ChangeAddressGen
-        (maxLengthAddressFor (keyFlavorState @s),)
-        (maxLengthAddressFor (keyFlavorState @s))
+        (maxLengthAddressFor (keyFlavorOfState @s),)
+        (maxLengthAddressFor (keyFlavorOfState @s))
