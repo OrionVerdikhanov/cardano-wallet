@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLabels #-}
@@ -65,7 +66,9 @@ import Cardano.DB.Sqlite.Delete
 import Cardano.Slotting.Slot
     ( WithOrigin (..) )
 import Cardano.Wallet.Address.Derivation
-    ( Depth (..), PersistPrivateKey (..), WalletKey (..) )
+    ( Depth (..), WalletKey (..) )
+import Cardano.Wallet.Address.Keys.PersistPrivateKey
+    ( serializeXPrv, unsafeDeserializeXPrv )
 import Cardano.Wallet.Checkpoints
     ( DeltaCheckpoints (..) )
 import Cardano.Wallet.DB
@@ -138,7 +141,7 @@ import Cardano.Wallet.DB.WalletState
     , getSlot
     )
 import Cardano.Wallet.Flavor
-    ( KeyOf )
+    ( KeyFlavor (keyFlavor), KeyOf, StateWithAnyKey, StateWithKey )
 import Cardano.Wallet.Primitive.Passphrase.Types
     ( PassphraseHash )
 import Cardano.Wallet.Primitive.Slotting
@@ -235,9 +238,8 @@ import qualified Data.Text as T
 newDBFactory
     :: forall s k.
         ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithKey s k
         , WalletKey k
-        , k ~ KeyOf s
         )
     => Tracer IO DBFactoryLog
        -- ^ Logging object
@@ -282,7 +284,7 @@ newDBFactory tr defaultFieldValues ti = \case
     Just databaseDir -> do
         refs <- newRefCount
         pure DBFactory
-            { withDatabase = \wid action -> withRef refs wid $ withDBFresh
+            { withDatabase = \wid action -> withRef refs wid $ withDBFresh @s @k
                 (contramap (MsgWalletDB (databaseFile wid)) tr)
                 (Just defaultFieldValues)
                 (databaseFile wid)
@@ -396,7 +398,7 @@ withDBOpenFromFile
        -- Use 'Nothing' to skip manual migrations.
     -> FilePath
        -- ^ Path to database file
-    -> (DBOpen (SqlPersistT IO) IO s k -> IO a)
+    -> (DBOpen (SqlPersistT IO) IO s -> IO a)
        -- ^ Action to run.
     -> IO a
 withDBOpenFromFile tr defaultFieldValues dbFile action = do
@@ -415,10 +417,10 @@ withDBOpenFromFile tr defaultFieldValues dbFile action = do
 -- Returns a cleanup function which you should always use exactly once when
 -- finished with the 'DBOpen'.
 newDBOpenInMemory
-    :: forall s k
+    :: forall s
      . Tracer IO WalletDBLog
        -- ^ Logging object
-    -> IO (IO (), DBOpen (SqlPersistT IO) IO s k)
+    -> IO (IO (), DBOpen (SqlPersistT IO) IO s)
 newDBOpenInMemory tr = do
     let tr' = contramap MsgDB tr
     (destroy, sqliteContext) <-
@@ -428,7 +430,7 @@ newDBOpenInMemory tr = do
 
 newQueryLock
     :: SqliteContext
-    -> IO (DBOpen (SqlPersistT IO) IO s k)
+    -> IO (DBOpen (SqlPersistT IO) IO s)
 newQueryLock SqliteContext{runQuery} = do
     -- NOTE
     -- The cache will not work properly unless 'atomically' is protected by a
@@ -438,7 +440,7 @@ newQueryLock SqliteContext{runQuery} = do
         { atomically = withMVar queryLock . const . runQuery }
 
 -- | Retrieve the wallet id from the database if it's initialized.
-retrieveWalletId :: DBOpen (SqlPersistT IO) IO s k -> IO (Maybe W.WalletId)
+retrieveWalletId :: DBOpen (SqlPersistT IO) IO s -> IO (Maybe W.WalletId)
 retrieveWalletId DBOpen{atomically} =
     atomically
         $ fmap (walId . entityVal)
@@ -449,10 +451,9 @@ retrieveWalletId DBOpen{atomically} =
 -------------------------------------------------------------------------------}
 
 withDBFreshFromDBOpen
-    :: forall k s a
+    :: forall s a
      . ( PersistAddressBook s
-       , PersistPrivateKey (k 'RootK)
-       , k ~ KeyOf s
+       , StateWithAnyKey s
        )
     => TimeInterpreter IO
     -- ^ Time interpreter for slot to time conversions
@@ -460,7 +461,7 @@ withDBFreshFromDBOpen
     -- ^ Wallet ID of the database
     -> (DBFresh IO s -> IO a)
     -- ^ Action to run.
-    -> DBOpen (SqlPersistT IO) IO s k
+    -> DBOpen (SqlPersistT IO) IO s
     -- ^ Already opened database.
     -> IO a
 withDBFreshFromDBOpen ti wid action = action . newDBFreshFromDBOpen ti wid
@@ -474,9 +475,8 @@ withDBFreshFromDBOpen ti wid action = action . newDBFreshFromDBOpen ti wid
 withDBFresh
     :: forall s k a.
         ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithKey s k
         , WalletKey k
-        , k ~ KeyOf s
         )
     => Tracer IO WalletDBLog
        -- ^ Logging object
@@ -493,25 +493,24 @@ withDBFresh
        -- ^ Action to run.
     -> IO a
 withDBFresh tr defaultFieldValues dbFile ti wid action =
-    withDBOpenFromFile tr defaultFieldValues dbFile
+    withDBOpenFromFile @s @k tr defaultFieldValues dbFile
         $  action . newDBFreshFromDBOpen ti wid
 
 -- | Runs an IO action with a new 'DBFresh' backed by a sqlite in-memory
 -- database.
 withDBFreshInMemory
-    :: forall s k a.
-        ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
-        , k ~ KeyOf s
-        )
+    :: forall s a
+     . ( PersistAddressBook s
+       , StateWithAnyKey s
+       )
     => Tracer IO WalletDBLog
-       -- ^ Logging object.
+    -- ^ Logging object.
     -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
+    -- ^ Time interpreter for slot to time conversions
     -> W.WalletId
-       -- ^ Wallet ID of the database.
+    -- ^ Wallet ID of the database.
     -> (DBFresh IO s -> IO a)
-       -- ^ Action to run.
+    -- ^ Action to run.
     -> IO a
 withDBFreshInMemory tr ti wid action = bracket
     (newDBFreshInMemory tr ti wid) fst (action . snd)
@@ -521,17 +520,16 @@ withDBFreshInMemory tr ti wid action = bracket
 -- Returns a cleanup function which you should always use exactly once when
 -- finished with the 'DBFresh'.
 newDBFreshInMemory
-    :: forall s k.
-        ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
-        , k ~ KeyOf s
-        )
+    :: forall s
+     . ( PersistAddressBook s
+       , StateWithAnyKey s
+       )
     => Tracer IO WalletDBLog
-       -- ^ Logging object.
+    -- ^ Logging object.
     -> TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions.
+    -- ^ Time interpreter for slot to time conversions.
     -> W.WalletId
-       -- ^ Wallet ID of the database.
+    -- ^ Wallet ID of the database.
     -> IO (IO (), DBFresh IO s)
 newDBFreshInMemory tr ti wid = do
     second (newDBFreshFromDBOpen ti wid) <$> newDBOpenInMemory tr
@@ -539,17 +537,14 @@ newDBFreshInMemory tr ti wid = do
 -- | From a 'DBOpen', create a database which can store the state
 -- of one wallet with a specific 'WalletId'.
 newDBFreshFromDBOpen
-    :: forall s k.
-        ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
-        , k ~ KeyOf s
-        )
+    :: forall s
+     . (PersistAddressBook s, StateWithAnyKey s)
     => TimeInterpreter IO
-       -- ^ Time interpreter for slot to time conversions
+    -- ^ Time interpreter for slot to time conversions
     -> W.WalletId
-       -- ^ Wallet ID of the database.
-    -> DBOpen (SqlPersistT IO) IO s k
-       -- ^ A (thread-)safe wrapper for query execution.
+    -- ^ Wallet ID of the database.
+    -> DBOpen (SqlPersistT IO) IO s
+    -- ^ A (thread-)safe wrapper for query execution.
     -> DBFresh IO s
 newDBFreshFromDBOpen ti wid_ DBOpen{atomically=atomically_} =
     mkDBFreshFromParts ti wid_
@@ -655,7 +650,7 @@ newDBFreshFromDBOpen ti wid_ DBOpen{atomically=atomically_} =
     dbDelegation = mkDBDelegation ti wid_
 
 
-    dbPrivateKey = mkDBPrivateKey wid_
+    dbPrivateKey = mkDBPrivateKey @(KeyOf s) wid_
 
 mkDBFreshFromParts
     :: forall stm m s
@@ -843,18 +838,18 @@ genesisParametersFromEntity (Wallet _ _ _ _ _ hash startTime) =
                     Private Key store
 -----------------------------------------------------------------------}
 mkDBPrivateKey
-    :: forall k. PersistPrivateKey (k 'RootK)
+    :: forall k. KeyFlavor k
     => W.WalletId
     -> DBPrivateKey (SqlPersistT IO) k
 mkDBPrivateKey wid = DBPrivateKey
     { putPrivateKey_ = \key -> do
         deleteWhere [PrivateKeyWalletId ==. wid]
-        insert_ (mkPrivateKeyEntity wid key)
-    , readPrivateKey_ = selectPrivateKey wid
+        insert_ (mkPrivateKeyEntity @k wid key)
+    , readPrivateKey_ = selectPrivateKey @k wid
     }
 
 mkPrivateKeyEntity
-    :: PersistPrivateKey (k 'RootK)
+    :: forall k. KeyFlavor k
     => W.WalletId
     -> (k 'RootK XPrv, W.PassphraseHash)
     -> PrivateKey
@@ -864,14 +859,14 @@ mkPrivateKeyEntity wid kh = PrivateKey
     , privateKeyHash = hash
     }
   where
-    (root, hash) = serializeXPrv kh
+    (root, hash) = serializeXPrv (keyFlavor @k) kh
 
 privateKeyFromEntity
-    :: PersistPrivateKey (k 'RootK)
+    :: forall k. KeyFlavor k
     => PrivateKey
     -> (k 'RootK XPrv, PassphraseHash)
 privateKeyFromEntity (PrivateKey _ k h) =
-    unsafeDeserializeXPrv (k, h)
+    unsafeDeserializeXPrv (keyFlavor @k) (k, h)
 
 {-------------------------------------------------------------------------------
     SQLite database operations
@@ -952,12 +947,12 @@ selectTransactionInfo ti tip lookupTx lookupTxOut meta = do
     liftIO . evaluate $ force result
 
 selectPrivateKey
-    :: (MonadIO m, PersistPrivateKey (k 'RootK))
+    :: forall k m. (MonadIO m, KeyFlavor k)
     => W.WalletId
     -> SqlPersistT m (Maybe (k 'RootK XPrv, PassphraseHash))
 selectPrivateKey wid = do
     keys <- selectFirst [PrivateKeyWalletId ==. wid] []
-    pure $ (privateKeyFromEntity . entityVal) <$> keys
+    pure $ (privateKeyFromEntity @k . entityVal) <$> keys
 
 selectGenesisParameters
     :: MonadIO m

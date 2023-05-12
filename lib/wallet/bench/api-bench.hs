@@ -47,12 +47,7 @@ import Cardano.BM.Trace
 import Cardano.Wallet
     ( readWalletMeta )
 import Cardano.Wallet.Address.Derivation
-    ( DelegationAddress (..)
-    , Depth (..)
-    , PersistPrivateKey
-    , WalletKey
-    , delegationAddressS
-    )
+    ( DelegationAddress (..), Depth (..), WalletKey, delegationAddressS )
 import Cardano.Wallet.Address.Derivation.Byron
     ( ByronKey )
 import Cardano.Wallet.Address.Derivation.Shared
@@ -78,7 +73,7 @@ import Cardano.Wallet.DummyTarget.Primitive.Types
     , dummyTimeInterpreter
     )
 import Cardano.Wallet.Flavor
-    ( KeyOf )
+    ( StateWithKey )
 import Cardano.Wallet.Logging
     ( trMessageText )
 import Cardano.Wallet.Network
@@ -461,11 +456,10 @@ benchmarkWallets
     :: forall n (k :: Depth -> * -> *) ktype s results
      . ( PersistAddressBook s
        , WalletKey k
-       , PersistPrivateKey (k 'RootK)
        , TxWitnessTagFor k
        , Buildable results
        , ToJSON results
-       , k ~ KeyOf s
+       , StateWithKey s k
        )
     => Text
         -- ^ Benchmark name (used for naming resulting files)
@@ -520,10 +514,9 @@ mockTimeInterpreter = dummyTimeInterpreter
 withWalletsFromDirectory
     :: forall n s k ktype a
      . ( PersistAddressBook s
-       , PersistPrivateKey (k 'RootK)
        , WalletKey k
        , TxWitnessTagFor k
-       , k ~ KeyOf s
+       , StateWithKey s k
        )
     => FilePath
         -- ^ Directory of database files

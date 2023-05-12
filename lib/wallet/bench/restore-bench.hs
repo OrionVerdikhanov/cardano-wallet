@@ -59,7 +59,7 @@ import Cardano.Wallet
     , dummyChangeAddressGen
     )
 import Cardano.Wallet.Address.Derivation
-    ( Depth (..), PersistPrivateKey, WalletKey, digest, publicKey )
+    ( Depth (..), WalletKey, digest, publicKey )
 import Cardano.Wallet.Address.Derivation.Byron
     ( ByronKey )
 import Cardano.Wallet.Address.Derivation.Shelley
@@ -91,7 +91,7 @@ import Cardano.Wallet.DB
 import Cardano.Wallet.DB.Layer
     ( PersistAddressBook, withDBFresh )
 import Cardano.Wallet.Flavor
-    ( KeyOf )
+    ( StateWithKey )
 import Cardano.Wallet.Launch
     ( CardanoNodeConn, NetworkConfiguration (..), parseGenesisData )
 import Cardano.Wallet.Logging
@@ -702,12 +702,11 @@ bench_restoration
         , IsOwned s k 'CredFromKeyK
         , WalletKey k
         , PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithKey s k
         , HasSNetworkId n
         , TxWitnessTagFor k
         , Buildable results
         , ToJSON results
-        , k ~ KeyOf s
         )
     => PipeliningStrategy (CardanoBlock StandardCrypto)
     -> SNetworkId n
@@ -841,9 +840,8 @@ traceBlockHeadersProgressForPlotting t0  tr = Tracer $ \bs -> do
 withBenchDBLayer
     :: forall s a k.
         ( PersistAddressBook s
-        , PersistPrivateKey (k 'RootK)
+        , StateWithKey s k
         , WalletKey k
-        , k ~ KeyOf s
         )
     => TimeInterpreter IO
     -> Trace IO Text

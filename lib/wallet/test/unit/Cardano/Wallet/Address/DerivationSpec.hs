@@ -1,10 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -23,7 +24,6 @@ import Cardano.Wallet.Address.Derivation
     , DerivationIndex (..)
     , DerivationType (..)
     , Index
-    , PersistPrivateKey (..)
     , PersistPublicKey (..)
     , WalletKey (..)
     , getIndex
@@ -34,6 +34,10 @@ import Cardano.Wallet.Address.Derivation.Icarus
     ( IcarusKey (..) )
 import Cardano.Wallet.Address.Derivation.Shelley
     ( ShelleyKey (..) )
+import Cardano.Wallet.Address.Keys.PersistPrivateKey
+    ( serializeXPrv, unsafeDeserializeXPrv )
+import Cardano.Wallet.Flavor
+    ( KeyFlavor (..) )
 import Cardano.Wallet.Gen
     ( genMnemonic )
 import Cardano.Wallet.Primitive.Passphrase
@@ -222,11 +226,16 @@ prop_roundtripEnumIndexSoft ix =
     (toEnum . fromEnum) ix === ix .&&. (toEnum . fromEnum . getIndex) ix === ix
 
 prop_roundtripXPrv
-    :: (PersistPrivateKey (k 'RootK), Eq (k 'RootK XPrv), Show (k 'RootK XPrv))
+    :: forall k
+     . (Eq (k 'RootK XPrv), Show (k 'RootK XPrv), KeyFlavor k)
     => (k 'RootK XPrv, PassphraseHash)
     -> Property
 prop_roundtripXPrv xpriv = do
-    let xpriv' = (unsafeDeserializeXPrv . serializeXPrv) xpriv
+    let xpriv' =
+            ( unsafeDeserializeXPrv (keyFlavor @k)
+                . serializeXPrv (keyFlavor @k)
+            )
+                xpriv
     xpriv' === xpriv
 
 prop_roundtripXPub
