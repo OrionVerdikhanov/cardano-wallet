@@ -202,7 +202,6 @@ import Cardano.Wallet.Address.Book
     ( AddressBookIso )
 import Cardano.Wallet.Address.Derivation
     ( AccountIxForStaking (..)
-    , BoundedAddressLength (..)
     , DelegationAddress (..)
     , Depth (..)
     , DerivationIndex (..)
@@ -429,7 +428,11 @@ import Cardano.Wallet.Compat
 import Cardano.Wallet.DB
     ( DBFactory (..), DBFresh, DBLayer, loadDBLayer )
 import Cardano.Wallet.Flavor
-    ( KeyOf, WalletFlavor (..), WalletFlavorS (ShelleyWallet) )
+    ( KeyOf
+    , StateWithAnyKey
+    , WalletFlavor (..)
+    , WalletFlavorS (ShelleyWallet)
+    )
 import Cardano.Wallet.Network
     ( NetworkLayer (..), fetchRewardAccountBalances, timeInterpreter )
 import Cardano.Wallet.Pools
@@ -1762,8 +1765,8 @@ selectCoins
         , s ~ SeqState n k
         , AddressBookIso s
         , GenChange s
-        , BoundedAddressLength k
         , TxWitnessTagFor k
+        , StateWithAnyKey s
         )
     => ApiLayer s 'CredFromKeyK
     -> ArgGenChange s
@@ -1783,7 +1786,7 @@ selectCoins ctx@ApiLayer {..} argGenChange (ApiT walletId) body = do
                 & maybe (pure NoWithdrawal)
                     (shelleyOnlyMkWithdrawal @s @n
                         netLayer (txWitnessTagFor @k) db era)
-        let genChange = W.defaultChangeAddressGen argGenChange (Proxy @k)
+        let genChange = W.defaultChangeAddressGen argGenChange
         let paymentOuts = NE.toList $ addressAmountToTxOut <$> body ^. #payments
         let txCtx = defaultTransactionCtx
                 { txWithdrawal = withdrawal
@@ -1821,8 +1824,8 @@ selectCoinsForJoin
         , WalletFlavor s n
         , AddressBookIso s
         , Seq.SupportsDiscovery n k
-        , BoundedAddressLength k
         , DelegationAddress k 'CredFromKeyK
+        , StateWithAnyKey s
         )
     => ApiLayer s 'CredFromKeyK
     -> IO (Set PoolId)
@@ -1853,7 +1856,6 @@ selectCoinsForJoin ctx@ApiLayer{..}
             poolId
             poolStatus
         let changeAddrGen = W.defaultChangeAddressGen (delegationAddressS @n)
-                (Proxy @k)
 
         let txCtx = defaultTransactionCtx { txDelegationAction = Just action }
 
@@ -1890,7 +1892,7 @@ selectCoinsForQuit
         , WalletFlavor s n
         , AddressBookIso s
         , Seq.SupportsDiscovery n k
-        , BoundedAddressLength k
+        , StateWithAnyKey s
         , DelegationAddress k 'CredFromKeyK
         , TxWitnessTagFor k
         )
@@ -1909,7 +1911,6 @@ selectCoinsForQuit ctx@ApiLayer{..} (ApiT walletId) = do
             netLayer (txWitnessTagFor @k) era db
         action <- WD.quitStakePoolDelegationAction db withdrawal
         let changeAddrGen = W.defaultChangeAddressGen (delegationAddressS @n)
-                (Proxy @k)
         let txCtx = defaultTransactionCtx
                 { txDelegationAction = Just action
                 , txWithdrawal = withdrawal
@@ -2162,7 +2163,7 @@ postTransactionOld
         , WalletKey k
         , TxWitnessTagFor k
         , AddressBookIso s
-        , BoundedAddressLength k
+        , StateWithAnyKey s
         , HasDelegation s
         , WalletFlavor s n
         , IsOurs s RewardAccount
@@ -2201,7 +2202,7 @@ postTransactionOld ctx@ApiLayer{..} argGenChange (ApiT wid) body = do
                     txLayer
                     (coerce $ getApiT $ body ^. #passphrase)
                     wid
-                    (W.defaultChangeAddressGen argGenChange (Proxy @k))
+                    (W.defaultChangeAddressGen argGenChange)
                     (AnyRecentEra recentEra)
                     (PreSelection $ NE.toList outs)
                     txCtx
@@ -2345,9 +2346,9 @@ postTransactionFeeOld
     :: forall s n k
      . ( WalletFlavor s n
        , AddressBookIso s
-       , BoundedAddressLength k
        , TxWitnessTagFor k
        , k ~ KeyOf s
+       , StateWithAnyKey s
        )
     => ApiLayer s 'CredFromKeyK
     -> ApiT WalletId
@@ -2378,7 +2379,7 @@ postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
             txLayer
             timeTranslation
             recentEra
-            (dummyChangeAddressGen @k)
+            dummyChangeAddressGen
             defaultTransactionCtx
                 { txWithdrawal = wdrl
                 , txMetadata = body
@@ -3059,7 +3060,11 @@ decodeSharedTransaction ctx (ApiT wid) (ApiSerialisedTransaction (ApiT sealed) _
 
 balanceTransaction
     :: forall s k ktype n
-     . (GenChange s, BoundedAddressLength k, TxWitnessTagFor k, k ~ KeyOf s)
+     . ( GenChange s
+       , StateWithAnyKey s
+       , TxWitnessTagFor k
+       , k ~ KeyOf s
+       )
     => ApiLayer s ktype
     -> ArgGenChange s
     -> Maybe (Address -> Script KeyHash)
@@ -3139,7 +3144,7 @@ balanceTransaction
                     (Write.unsafeFromWalletProtocolParameters pp)
                     timeTranslation
                     (constructUTxOIndex walletUTxO)
-                    (W.defaultChangeAddressGen argGenChange (Proxy @k))
+                    (W.defaultChangeAddressGen argGenChange)
                     (getState wallet)
                     partialTx
 
@@ -3515,7 +3520,7 @@ joinStakePool
         , SoftDerivation k
         , WalletKey k
         , AddressBookIso s
-        , BoundedAddressLength k
+        , StateWithAnyKey s
         , HasDelegation s
         )
     => ApiLayer s 'CredFromKeyK
@@ -3552,7 +3557,7 @@ joinStakePool
                 txLayer
                 (coerce $ getApiT $ body ^. #passphrase)
                 walletId
-                (W.defaultChangeAddressGen argGenChange (Proxy @k))
+                (W.defaultChangeAddressGen argGenChange)
                 (AnyRecentEra recentEra)
                 (PreSelection [])
                 =<< WD.joinStakePool
@@ -3586,8 +3591,7 @@ joinStakePool
 
 delegationFee
     :: forall s n k
-     . ( BoundedAddressLength k
-       , GenChange s
+     . ( GenChange s
        , k ~ ShelleyKey
        , AddressBookIso s
        , s ~ SeqState n k
@@ -3609,7 +3613,7 @@ delegationFee ctx@ApiLayer{..} (ApiT walletId) = do
                 txLayer
                 timeTranslation
                 (AnyRecentEra recentEra)
-                (W.defaultChangeAddressGen (delegationAddressS @n) (Proxy @k))
+                (W.defaultChangeAddressGen (delegationAddressS @n))
         pure $ mkApiFee (Just deposit) [] feePercentiles
 
 quitStakePool
@@ -3619,7 +3623,6 @@ quitStakePool
         , GenChange s
         , IsOwned s k 'CredFromKeyK
         , AddressBookIso s
-        , BoundedAddressLength k
         , IsOurs (SeqState n k) RewardAccount
         )
     => ApiLayer s 'CredFromKeyK
@@ -3641,7 +3644,7 @@ quitStakePool ctx@ApiLayer{..} argGenChange (ApiT walletId) body = do
                 txLayer
                 (coerce $ getApiT $ body ^. #passphrase)
                 walletId
-                (W.defaultChangeAddressGen argGenChange (Proxy @k))
+                (W.defaultChangeAddressGen argGenChange)
                 (AnyRecentEra recentEra)
                 (PreSelection [])
                 txCtx
