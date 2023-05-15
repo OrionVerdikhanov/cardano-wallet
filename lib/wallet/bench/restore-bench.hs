@@ -91,7 +91,7 @@ import Cardano.Wallet.DB
 import Cardano.Wallet.DB.Layer
     ( PersistAddressBook, withDBFresh )
 import Cardano.Wallet.Flavor
-    ( StateWithKey )
+    ( StateWithKey, StateWithAnyKey )
 import Cardano.Wallet.Launch
     ( CardanoNodeConn, NetworkConfiguration (..), parseGenesisData )
 import Cardano.Wallet.Logging
@@ -838,11 +838,10 @@ traceBlockHeadersProgressForPlotting t0  tr = Tracer $ \bs -> do
         Nothing -> pure ()
 
 withBenchDBLayer
-    :: forall s a k.
-        ( PersistAddressBook s
-        , StateWithKey s k
-        , WalletKey k
-        )
+    :: forall s a
+     . ( PersistAddressBook s
+       , StateWithAnyKey s
+       )
     => TimeInterpreter IO
     -> Trace IO Text
     -> WalletId

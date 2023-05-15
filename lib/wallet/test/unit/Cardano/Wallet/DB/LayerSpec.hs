@@ -54,7 +54,7 @@ import Cardano.Mnemonic
 import Cardano.Wallet
     ( readWalletMeta )
 import Cardano.Wallet.Address.Derivation
-    ( Depth (..), DerivationType (..), Index, PaymentAddress (..), WalletKey )
+    ( Depth (..), DerivationType (..), Index, PaymentAddress (..) )
 import Cardano.Wallet.Address.Derivation.Byron
     ( ByronKey (..) )
 import Cardano.Wallet.Address.Derivation.Icarus
@@ -106,7 +106,7 @@ import Cardano.Wallet.DB.StateMachine
 import Cardano.Wallet.DummyTarget.Primitive.Types
     ( block0, dummyGenesisParameters, dummyTimeInterpreter )
 import Cardano.Wallet.Flavor
-    ( KeyOf, StateWithAnyKey, StateWithKey )
+    ( KeyOf, StateWithAnyKey, StateWithKey, keyFlavorOfState, KeyFlavorS (..) )
 import Cardano.Wallet.Gen
     ( genMnemonic )
 import Cardano.Wallet.Logging
@@ -812,7 +812,6 @@ prop_randomOpChunks
        , PersistAddressBook s
        , Show s
        , StateWithAnyKey s
-       , WalletKey (KeyOf s)
        )
     => NonEmptyList (Wallet s, WalletMetadata)
     -> Property
@@ -918,7 +917,6 @@ withShelleyDBLayer = withDBFreshInMemory nullTracer dummyTimeInterpreter testWid
 withShelleyFileDBFresh
     :: ( PersistAddressBook s
        , StateWithAnyKey s
-       , WalletKey (KeyOf s)
        )
     => FilePath
     -> (DBFresh IO s -> IO a)
@@ -1162,7 +1160,6 @@ withDBLayerFromCopiedFile
     :: forall k s a.
         ( PersistAddressBook s
         , StateWithKey s k
-        , WalletKey k
         , s ~ SeqState 'Mainnet k
         )
     => FilePath
@@ -1172,7 +1169,8 @@ withDBLayerFromCopiedFile
     -> IO ([WalletDBLog], a)
         -- ^ (logs, result of the action)
 withDBLayerFromCopiedFile dbName action = withinCopiedFile dbName
-    $ \path tr -> withDBOpenFromFile @s @k tr (Just defaultFieldValues) path
+    $ \path tr -> withDBOpenFromFile (keyFlavorOfState @s) tr
+        (Just defaultFieldValues) path
     $ \db -> do
         mwid <- retrieveWalletId db
         case mwid of
@@ -1276,12 +1274,11 @@ testMigrationRole dbName = do
         in fieldName field == unFieldNameDB fieldInDB
 
 testMigrationSeqStateDerivationPrefix
-    :: forall k s.
-        ( s ~ SeqState 'Mainnet k
-        , WalletKey k
-        , PersistAddressBook s
-        , StateWithAnyKey s
-        )
+    :: forall k s
+     . ( s ~ SeqState 'Mainnet k
+       , PersistAddressBook s
+       , StateWithAnyKey s
+       )
     => String
     -> ( Index 'Hardened 'PurposeK
        , Index 'Hardened 'CoinTypeK
@@ -1359,12 +1356,11 @@ isMsgManualMigrationPw = matchMsgManualMigration $ \field ->
     in  fieldName field == unFieldNameDB fieldInDB
 
 
-testCreateMetadataTable ::
-    forall k. (k ~ ShelleyKey) => IO ()
+testCreateMetadataTable :: IO ()
 testCreateMetadataTable = withSystemTempFile "db.sql" $ \path _ -> do
     let noop _ = pure ()
         tr = nullTracer
-    withDBOpenFromFile @_ @k tr (Just defaultFieldValues) path noop
+    withDBOpenFromFile ShelleyKeyS tr (Just defaultFieldValues) path noop
     actualVersion <- Sqlite.runSqlite (T.pack path) $ do
         [Sqlite.Single (version :: Int)] <- Sqlite.rawSql
             "SELECT version FROM database_schema_version \
@@ -1372,8 +1368,7 @@ testCreateMetadataTable = withSystemTempFile "db.sql" $ \path _ -> do
         pure $ SchemaVersion $ fromIntegral version
     actualVersion `shouldBe` currentSchemaVersion
 
-testNewerDatabaseIsNeverModified ::
-    forall k. (k ~ ShelleyKey) => IO ()
+testNewerDatabaseIsNeverModified :: IO ()
 testNewerDatabaseIsNeverModified = withSystemTempFile "db.sql" $ \path _ -> do
     let newerVersion = SchemaVersion 100
     _ <- Sqlite.runSqlite (T.pack path) $ do
@@ -1385,7 +1380,7 @@ testNewerDatabaseIsNeverModified = withSystemTempFile "db.sql" $ \path _ -> do
             ) []
     let noop _ = pure ()
         tr = nullTracer
-    withDBOpenFromFile @_ @k tr (Just defaultFieldValues) path noop
+    withDBOpenFromFile ShelleyKeyS tr (Just defaultFieldValues) path noop
         `shouldThrow` \case
             InvalidDatabaseSchemaVersion {..}
                 | expectedVersion == currentSchemaVersion
@@ -1409,7 +1404,7 @@ testMigrationSubmissionsEncoding
     :: FilePath -> IO ()
 testMigrationSubmissionsEncoding dbName = do
     let performMigrations path =
-          withDBFresh @(SeqState 'Mainnet ShelleyKey) @ShelleyKey
+          withDBFresh @(SeqState 'Mainnet ShelleyKey)
             nullTracer (Just defaultFieldValues) path dummyTimeInterpreter
                 testWid $ \_ -> pure ()
         testOnCopiedAndMigrated test = fmap snd

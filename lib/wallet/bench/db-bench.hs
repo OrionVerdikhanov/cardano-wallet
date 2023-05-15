@@ -92,7 +92,7 @@ import Cardano.Wallet.DB.Layer
 import Cardano.Wallet.DummyTarget.Primitive.Types
     ( block0, dummyGenesisParameters, mkTxId )
 import Cardano.Wallet.Flavor
-    ( StateWithKey )
+    ( StateWithAnyKey )
 import Cardano.Wallet.Logging
     ( trMessageText )
 import Cardano.Wallet.Primitive.Model
@@ -725,11 +725,10 @@ withTempSqliteFile :: (FilePath -> IO a) -> IO a
 withTempSqliteFile action = withSystemTempFile "bench.db" $ \fp _ -> action fp
 
 setupDB
-    :: forall s k.
-        ( PersistAddressBook s
-        , StateWithKey s k
-        , WalletKey k
-        )
+    :: forall s
+     . ( PersistAddressBook s
+       , StateWithAnyKey s
+       )
     => Tracer IO WalletDBLog
     -> IO (BenchEnv s)
 setupDB tr = do
@@ -755,8 +754,7 @@ singleEraInterpreter = hoistTimeInterpreter (pure . runIdentity) $
 withCleanDB
     :: ( NFData c
        , PersistAddressBook s
-       , StateWithKey s k
-       , WalletKey k
+       , StateWithAnyKey s
        , NFData b
        )
     => Tracer IO WalletDBLog

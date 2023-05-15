@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE GADTs #-}
 
 -- |
 -- Copyright: © 2018-2020 IOHK
@@ -33,10 +34,6 @@ import Cardano.DB.Sqlite
     , fieldType
     , tableName
     )
-import Cardano.Wallet.Address.Derivation.Icarus
-    ( IcarusKey )
-import Cardano.Wallet.Address.Derivation.Shelley
-    ( ShelleyKey (..) )
 import Cardano.Wallet.DB.Sqlite.Schema
     ( EntityField (..) )
 import Cardano.Wallet.Primitive.Passphrase.Types
@@ -53,8 +50,6 @@ import Data.Functor
     ( (<&>) )
 import Data.Maybe
     ( mapMaybe )
-import Data.Proxy
-    ( Proxy (..) )
 import Data.String.Interpolate
     ( i )
 import Data.Text
@@ -81,6 +76,7 @@ import qualified Cardano.Wallet.Primitive.Types.Address as W
 import qualified Cardano.Wallet.Primitive.Types.Coin as W
 import qualified Data.Text as T
 import qualified Database.Sqlite as Sqlite
+import Cardano.Wallet.Flavor (KeyFlavorS (..))
 
 {-------------------------------------------------------------------------------
     Database Migrations
@@ -124,12 +120,11 @@ currentSchemaVersion = SchemaVersion 2
 -- | Executes any manual database migration steps that may be required on
 -- startup.
 migrateManually
-    :: W.WalletKey k
-    => Tracer IO DBLog
-    -> Proxy k
+    :: Tracer IO DBLog
+    -> KeyFlavorS k
     -> DefaultFieldValues
     -> [ManualMigration]
-migrateManually tr proxy defaultFieldValues =
+migrateManually tr key defaultFieldValues =
     ManualMigration <$>
     [ initializeSchemaVersionTable
     , cleanupCheckpointTable
@@ -549,25 +544,15 @@ migrateManually tr proxy defaultFieldValues =
             Sqlite.finalize query
 
     addSeqStateDerivationPrefixIfMissing :: Sqlite.Connection -> IO ()
-    addSeqStateDerivationPrefixIfMissing conn
-        | isIcarusDatabase = do
-            addColumn_ conn True (DBField SeqStateDerivationPrefix) icarusPrefix
-
-        | isShelleyDatabase = do
-            addColumn_ conn True (DBField SeqStateDerivationPrefix) shelleyPrefix
-
-        | otherwise =
-            return ()
+    addSeqStateDerivationPrefixIfMissing conn = case key of
+        IcarusKeyS -> addColumn_ conn True (DBField SeqStateDerivationPrefix)
+            $ prefix Seq.purposeBIP44
+        ShelleyKeyS -> addColumn_ conn True (DBField SeqStateDerivationPrefix)
+            $ prefix Seq.purposeCIP1852
+        _ -> pure ()
       where
-        isIcarusDatabase =
-            W.keyTypeDescriptor proxy == W.keyTypeDescriptor (Proxy @IcarusKey)
-        icarusPrefix = T.pack $ show $ toText
-            $ Seq.DerivationPrefix (Seq.purposeBIP44, Seq.coinTypeAda, minBound)
-
-        isShelleyDatabase =
-            W.keyTypeDescriptor proxy == W.keyTypeDescriptor (Proxy @ShelleyKey)
-        shelleyPrefix = T.pack $ show $ toText
-            $ Seq.DerivationPrefix (Seq.purposeCIP1852, Seq.coinTypeAda, minBound)
+        prefix t = T.pack $ show $ toText
+            $ Seq.DerivationPrefix (t , Seq.coinTypeAda, minBound)
 
     --
     --   - UTxOInternal

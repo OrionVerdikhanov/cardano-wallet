@@ -141,7 +141,7 @@ import Cardano.Wallet.DB.WalletState
     , getSlot
     )
 import Cardano.Wallet.Flavor
-    ( KeyFlavor (keyFlavor), KeyOf, StateWithAnyKey, StateWithKey )
+    ( KeyFlavor (keyFlavor), KeyOf, StateWithAnyKey, StateWithKey, KeyFlavorS, keyFlavorOfState )
 import Cardano.Wallet.Primitive.Passphrase.Types
     ( PassphraseHash )
 import Cardano.Wallet.Primitive.Slotting
@@ -284,7 +284,7 @@ newDBFactory tr defaultFieldValues ti = \case
     Just databaseDir -> do
         refs <- newRefCount
         pure DBFactory
-            { withDatabase = \wid action -> withRef refs wid $ withDBFresh @s @k
+            { withDatabase = \wid action -> withRef refs wid $ withDBFresh @s
                 (contramap (MsgWalletDB (databaseFile wid)) tr)
                 (Just defaultFieldValues)
                 (databaseFile wid)
@@ -389,9 +389,8 @@ instance ToText DBFactoryLog where
 --
 -- If the given file path does not exist, it will be created.
 withDBOpenFromFile
-    :: forall s k a
-     . WalletKey k
-    => Tracer IO WalletDBLog
+    :: KeyFlavorS k
+    -> Tracer IO WalletDBLog
        -- ^ Logging object
     -> Maybe DefaultFieldValues
        -- ^ Default database field values, used during manual migration.
@@ -401,10 +400,10 @@ withDBOpenFromFile
     -> (DBOpen (SqlPersistT IO) IO s -> IO a)
        -- ^ Action to run.
     -> IO a
-withDBOpenFromFile tr defaultFieldValues dbFile action = do
+withDBOpenFromFile key tr defaultFieldValues dbFile action = do
     let trDB = contramap MsgDB tr
     let manualMigrations =
-            maybe [] (migrateManually trDB (Proxy @k)) defaultFieldValues
+            maybe [] (migrateManually trDB key) defaultFieldValues
     let autoMigrations   = migrateAll
     withConnectionPool trDB dbFile $ \pool -> do
         res <- newSqliteContext trDB pool manualMigrations autoMigrations
@@ -473,10 +472,9 @@ withDBFreshFromDBOpen ti wid action = action . newDBFreshFromDBOpen ti wid
 -- If the given file path does not exist, it will be created by the sqlite
 -- library.
 withDBFresh
-    :: forall s k a.
+    :: forall s a.
         ( PersistAddressBook s
-        , StateWithKey s k
-        , WalletKey k
+        , StateWithAnyKey s
         )
     => Tracer IO WalletDBLog
        -- ^ Logging object
@@ -493,8 +491,8 @@ withDBFresh
        -- ^ Action to run.
     -> IO a
 withDBFresh tr defaultFieldValues dbFile ti wid action =
-    withDBOpenFromFile @s @k tr defaultFieldValues dbFile
-        $  action . newDBFreshFromDBOpen ti wid
+    withDBOpenFromFile (keyFlavorOfState @s) tr  defaultFieldValues dbFile
+        $ action . newDBFreshFromDBOpen ti wid
 
 -- | Runs an IO action with a new 'DBFresh' backed by a sqlite in-memory
 -- database.
