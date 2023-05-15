@@ -66,7 +66,7 @@ import Cardano.DB.Sqlite.Delete
 import Cardano.Slotting.Slot
     ( WithOrigin (..) )
 import Cardano.Wallet.Address.Derivation
-    ( Depth (..), WalletKey (..) )
+    ( Depth (..) )
 import Cardano.Wallet.Address.Keys.PersistPrivateKey
     ( serializeXPrv, unsafeDeserializeXPrv )
 import Cardano.Wallet.Checkpoints
@@ -141,7 +141,13 @@ import Cardano.Wallet.DB.WalletState
     , getSlot
     )
 import Cardano.Wallet.Flavor
-    ( KeyFlavor (keyFlavor), KeyOf, StateWithAnyKey, StateWithKey, KeyFlavorS, keyFlavorOfState )
+    ( KeyFlavor (keyFlavor)
+    , KeyFlavorS (..)
+    , KeyOf
+    , StateWithAnyKey
+
+    , keyFlavorOfState
+    )
 import Cardano.Wallet.Primitive.Passphrase.Types
     ( PassphraseHash )
 import Cardano.Wallet.Primitive.Slotting
@@ -176,8 +182,6 @@ import Data.Generics.Internal.VL.Lens
     ( (^.) )
 import Data.Maybe
     ( catMaybes, fromMaybe, maybeToList )
-import Data.Proxy
-    ( Proxy (..) )
 import Data.Store
     ( Store (..), UpdateStore )
 import Data.Text
@@ -216,6 +220,8 @@ import UnliftIO.Exception
 import UnliftIO.MVar
     ( modifyMVar, modifyMVar_, newMVar, readMVar, withMVar )
 
+import Cardano.Wallet.Address.Keys.WalletKey
+    ( keyTypeDescriptorNew )
 import qualified Cardano.Wallet.Primitive.Model as W
 import qualified Cardano.Wallet.Primitive.Passphrase as W
 import qualified Cardano.Wallet.Primitive.Types as W
@@ -236,10 +242,9 @@ import qualified Data.Text as T
 
 -- | Instantiate a 'DBFactory' from a given directory, or in-memory for testing.
 newDBFactory
-    :: forall s k.
+    :: forall s .
         ( PersistAddressBook s
-        , StateWithKey s k
-        , WalletKey k
+        , StateWithAnyKey s
         )
     => Tracer IO DBFactoryLog
        -- ^ Logging object
@@ -305,10 +310,11 @@ newDBFactory tr defaultFieldValues ti = \case
                     let trDel = contramap (MsgRemovingDatabaseFile widp) tr
                     deleteSqliteDatabase trDel (databaseFile wid)
             , listDatabases =
-                findDatabases @k tr databaseDir
+                findDatabases key tr databaseDir
             }
       where
-        databaseFilePrefix = keyTypeDescriptor $ Proxy @k
+        key = keyFlavorOfState @s
+        databaseFilePrefix = keyTypeDescriptorNew key
         databaseFile wid =
             databaseDir </>
             databaseFilePrefix <> "." <>
@@ -317,11 +323,11 @@ newDBFactory tr defaultFieldValues ti = \case
 -- | Return all wallet databases that match the specified key type within the
 --   specified directory.
 findDatabases
-    :: forall k. WalletKey k
-    => Tracer IO DBFactoryLog
+    :: KeyFlavorS k
+    -> Tracer IO DBFactoryLog
     -> FilePath
     -> IO [W.WalletId]
-findDatabases tr dir = do
+findDatabases key tr dir = do
     files <- listDirectory dir
     fmap catMaybes $ forM files $ \file -> do
         isFile <- doesFileExist (dir </> file)
@@ -336,7 +342,7 @@ findDatabases tr dir = do
                         return Nothing
             _ -> return Nothing
   where
-    expectedPrefix = T.pack $ keyTypeDescriptor $ Proxy @k
+    expectedPrefix = T.pack $ keyTypeDescriptorNew key
 
 data DBFactoryLog
     = MsgFoundDatabase FilePath Text

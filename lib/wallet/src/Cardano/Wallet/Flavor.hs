@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
+
 module Cardano.Wallet.Flavor
     ( WalletFlavorS (..)
     , WalletFlavor (..)
