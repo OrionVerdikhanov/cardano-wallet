@@ -141,6 +141,8 @@ import Cardano.Wallet.Address.Discovery.Shared
     ( estimateMaxWitnessRequiredPerInput )
 import Cardano.Wallet.Byron.Compatibility
     ( maryTokenBundleMaxSize )
+import Cardano.Wallet.Flavor
+    ( KeyFlavorS (..) )
 import Cardano.Wallet.Gen
     ( genMnemonic, genScript )
 import Cardano.Wallet.Primitive.Model
@@ -687,7 +689,8 @@ prop_signTransaction_addsRewardAccountKey
                 tl = testTxLayer
 
                 sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-                sealedTx' = signTransaction tl (AnyCardanoEra era) AnyWitnessCountCtx
+                sealedTx' = signTransaction ShelleyKeyS
+                    tl (AnyCardanoEra era) AnyWitnessCountCtx
                     (const Nothing) Nothing rootK utxo Nothing sealedTx
 
                 expectedWits :: [InAnyCardanoEra Cardano.KeyWitness]
@@ -762,7 +765,7 @@ prop_signTransaction_addsExtraKeyWitnesses
             tl = testTxLayer
 
             sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-            sealedTx' = signTransaction tl
+            sealedTx' = signTransaction ShelleyKeyS tl
                 (AnyCardanoEra era)
                 AnyWitnessCountCtx
                 (lookupFnFromKeys extraKeys)
@@ -899,7 +902,7 @@ prop_signTransaction_addsTxInWitnesses
                 tl = testTxLayer
 
                 sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-                sealedTx' = signTransaction tl
+                sealedTx' = signTransaction ShelleyKeyS tl
                     (AnyCardanoEra era)
                     AnyWitnessCountCtx
                     (lookupFnFromKeys extraKeys)
@@ -955,7 +958,7 @@ prop_signTransaction_addsTxInCollateralWitnesses
                     tl = testTxLayer
 
                     sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-                    sealedTx' = signTransaction tl
+                    sealedTx' = signTransaction ShelleyKeyS tl
                         (AnyCardanoEra era)
                         AnyWitnessCountCtx
                         (lookupFnFromKeys extraKeys)
@@ -994,7 +997,7 @@ prop_signTransaction_neverRemovesWitnesses
             tl = testTxLayer
 
             sealedTx = sealedTxFromCardano' tx
-            sealedTx' = signTransaction tl
+            sealedTx' = signTransaction ShelleyKeyS tl
                 (AnyCardanoEra era)
                 AnyWitnessCountCtx
                 (lookupFnFromKeys extraKeys)
@@ -1029,7 +1032,7 @@ prop_signTransaction_neverChangesTxBody
             tl = testTxLayer
 
             sealedTx = sealedTxFromCardano' tx
-            sealedTx' = signTransaction tl
+            sealedTx' = signTransaction ShelleyKeyS tl
                 (AnyCardanoEra era)
                 AnyWitnessCountCtx
                 (lookupFnFromKeys extraKeys)
@@ -1069,7 +1072,7 @@ prop_signTransaction_preservesScriptIntegrity (AnyCardanoEra era) rootK utxo =
             tl = testTxLayer
 
             sealedTx = sealedTxFromCardano' tx
-            sealedTx' = signTransaction tl
+            sealedTx' = signTransaction ShelleyKeyS tl
                 (AnyCardanoEra era)
                 AnyWitnessCountCtx
                 (const Nothing)

@@ -265,7 +265,6 @@ import Cardano.Wallet.Address.Derivation
     , ToRewardAccount (..)
     , WalletKey (..)
     , deriveRewardAccount
-    , hashVerificationKey
     , liftDelegationAddressS
     , liftIndex
     , stakeDerivationPath
@@ -308,6 +307,13 @@ import Cardano.Wallet.Address.Discovery.Shared
     )
 import Cardano.Wallet.Address.Keys.BoundedAddressLength
     ( maxLengthAddressFor )
+import Cardano.Wallet.Address.Keys.WalletKey
+    ( afterByron
+    , changePassphraseNew
+    , getRawKeyNew
+    , hashVerificationKeyNew
+    , liftRawKeyNew
+    )
 import Cardano.Wallet.Checkpoints
     ( DeltaCheckpoints (..)
     , SparseCheckpointsConfig (..)
@@ -341,8 +347,10 @@ import Cardano.Wallet.DB.WalletState
     , getSlot
     )
 import Cardano.Wallet.Flavor
-    ( KeyOf
+    ( KeyFlavorS (..)
+    , KeyOf
     , StateWithAnyKey
+    , StateWithKey
     , WalletFlavor (..)
     , WalletFlavorS (..)
     , keyFlavorOfState
@@ -517,7 +525,7 @@ import Control.Arrow
 import Control.DeepSeq
     ( NFData )
 import Control.Monad
-    ( forM, forM_, replicateM, unless, when, (<=<) )
+    ( forM, forM_, join, replicateM, unless, when, (<=<) )
 import Control.Monad.Class.MonadTime
     ( DiffTime
     , MonadMonotonicTime (..)
@@ -918,11 +926,10 @@ updateWallet ctx f = onWalletState @IO @s ctx $ update $ \s ->
 
 -- | Change a wallet's passphrase to the given passphrase.
 updateWalletPassphraseWithOldPassphrase
-    :: forall ctx s k.
-        ( HasDBLayer IO s ctx
-        , WalletKey k
-        , k ~ KeyOf s
-        )
+    :: forall ctx s
+     . ( HasDBLayer IO s ctx
+       , StateWithAnyKey s
+       )
     => ctx
     -> WalletId
     -> (Passphrase "user", Passphrase "user")
@@ -935,7 +942,8 @@ updateWalletPassphraseWithOldPassphrase ctx wid (old, new) =
             -- current scheme, we'll re-encrypt it using the current scheme,
             -- always.
             let new' = (currentPassphraseScheme, new)
-            let xprv' = changePassphrase (scheme, old) new' xprv
+            let xprv' = changePassphraseNew (keyFlavorOfState @s)
+                    (scheme, old) new' xprv
             lift $ attachPrivateKeyFromPwdScheme @ctx @s ctx (xprv', new')
   where
     db = ctx ^. typed
@@ -1804,11 +1812,11 @@ calcMinimumCoinValues pp txLayer era =
 
 signTransaction
   :: forall k ktype
-   . ( WalletKey k
-     , HardDerivation k
+   . ( HardDerivation k
      , Bounded (Index (AddressIndexDerivationType k) (AddressCredential k))
      )
-  => TransactionLayer k ktype SealedTx
+  => KeyFlavorS k
+  -> TransactionLayer k ktype SealedTx
   -- ^ The way to interact with the wallet backend
   -> Cardano.AnyCardanoEra
   -- ^ Preferred latest era
@@ -1829,35 +1837,46 @@ signTransaction
   -> SealedTx
   -- ^ The original transaction, with additional signatures added where
   -- necessary
-signTransaction tl preferredLatestEra witCountCtx keyLookup mextraRewardAcc
+signTransaction key tl preferredLatestEra witCountCtx keyLookup mextraRewardAcc
     (rootKey, rootPwd) utxo accIxForStakingM =
     let
         rewardAcnts :: [(XPrv, Passphrase "encryption")]
         rewardAcnts = ourRewardAcc : maybeToList mextraRewardAcc
           where
             ourRewardAcc =
-                (getRawKey $ deriveRewardAccount @k rootPwd rootKey minBound, rootPwd)
+                (getRawKeyNew key $
+                    deriveRewardAccount @k rootPwd rootKey minBound
+                , rootPwd
+                )
 
-        policyKey :: (KeyHash, XPrv, Passphrase "encryption")
-        policyKey =
-            ( hashVerificationKey @k CA.Policy $ liftRawKey $ toXPub xprv
-            , xprv
-            , rootPwd
-            )
-          where
-            xprv = derivePolicyPrivateKey rootPwd (getRawKey rootKey) minBound
-
-        stakingKeyM :: Maybe (KeyHash, XPrv, Passphrase "encryption")
-        stakingKeyM = case xprvM of
-            Just xprv -> Just
-                ( hashVerificationKey @k CA.Delegation $ liftRawKey $ toXPub xprv
+        policyKey :: Maybe (KeyHash, XPrv, Passphrase "encryption")
+        policyKey = afterByron key $ \key' ->
+                ( hashVerificationKeyNew key CA.Policy $ liftRawKeyNew key'
+                    $ toXPub xprv
                 , xprv
                 , rootPwd
                 )
-            Nothing -> Nothing
           where
-            xprvM = getRawKey . deriveRewardAccount @k rootPwd rootKey <$>
-                accIxForStakingM
+            xprv = derivePolicyPrivateKey rootPwd (getRawKeyNew key rootKey)
+                minBound
+
+        stakingKeyM :: Maybe (KeyHash, XPrv, Passphrase "encryption")
+        stakingKeyM = join $ afterByron key $ \key' ->
+            case xprvM of
+                Just xprv ->
+                    Just
+                        ( hashVerificationKeyNew key CA.Delegation
+                            $ liftRawKeyNew key'
+                            $ toXPub xprv
+                        , xprv
+                        , rootPwd
+                        )
+                Nothing -> Nothing
+          where
+            xprvM =
+                getRawKeyNew key
+                    . deriveRewardAccount @k rootPwd rootKey
+                    <$> accIxForStakingM
 
         inputResolver :: TxIn -> Maybe Address
         inputResolver i = do
@@ -1882,14 +1901,13 @@ type MakeRewardAccountBuilder k =
 -- Requires the encryption passphrase in order to decrypt the root private key.
 buildSignSubmitTransaction
     :: forall s n k
-     . ( WalletKey k
-       , HardDerivation k
+     . ( HardDerivation k
        , Bounded (Index (AddressIndexDerivationType k) (AddressCredential k))
        , IsOwned s k 'CredFromKeyK
        , IsOurs s RewardAccount
        , AddressBookIso s
        , WalletFlavor s n
-       , k ~ KeyOf s
+       , StateWithKey s k
        )
     => DBLayer IO s
     -> NetworkLayer IO Read.Block
@@ -1971,13 +1989,12 @@ buildSignSubmitTransaction db@DBLayer{..} netLayer txLayer pwd walletId
 
 buildAndSignTransactionPure
     :: forall k s n
-     . ( WalletKey k
-       , HardDerivation k
+     . ( HardDerivation k
        , Bounded (Index (AddressIndexDerivationType k) (AddressCredential k))
        , IsOwned s k 'CredFromKeyK
        , IsOurs s RewardAccount
        , WalletFlavor s n
-       , k ~ KeyOf s
+       , StateWithKey s k
        )
     => TimeTranslation
     -> UTxO
@@ -2015,6 +2032,7 @@ buildAndSignTransactionPure
 
         let passphrase = preparePassphrase passphraseScheme userPassphrase
             signedTx = signTransaction @k @'CredFromKeyK
+                (keyFlavorOfState @s)
                 txLayer
                 anyCardanoEra
                 AnyWitnessCountCtx

@@ -8,6 +8,7 @@
 -- ghc , at least 8.10.7 cannot figure out the constraint is necessary in
 -- liftRawKeyNew, so we disable the warning.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Interface over keys / address types
 module Cardano.Wallet.Address.Keys.WalletKey
@@ -17,12 +18,17 @@ module Cardano.Wallet.Address.Keys.WalletKey
     , digestNew
     , publicKeyNew
     , changePassphraseNew
+    , hashVerificationKeyNew
+    , AfterByron
+    , afterByron
     ) where
 
 import Prelude
 
 import Cardano.Address.Derivation
-    ( XPrv )
+    ( XPrv, xpubPublicKey )
+import Cardano.Address.Script
+    ( KeyHash (..), KeyRole )
 import Cardano.Crypto.Wallet
     ( XPub, toXPub, unXPub )
 import Cardano.Wallet.Address.Derivation.Byron
@@ -43,6 +49,8 @@ import Control.Lens
     ( over, view, (^.) )
 import Crypto.Hash
     ( Digest, HashAlgorithm, hash )
+import Crypto.Hash.Utils
+    ( blake2b224 )
 
 
 -- | Re-encrypt a private key using a different passphrase.
@@ -120,13 +128,13 @@ getRawKeyNew = \case
     ShelleyKeyS -> view shelleyKey
     SharedKeyS -> view sharedKey
 
-type family LiftRawKey k where
-    LiftRawKey ByronKey = 'False
-    LiftRawKey _ = 'True
+type family AfterByron k where
+    AfterByron ByronKey = 'False
+    AfterByron _ = 'True
 
 -- | Lift 'XPrv' or 'XPub' to 'WalletKey'.
 liftRawKeyNew
-    :: LiftRawKey key ~ 'True
+    :: AfterByron key ~ 'True
     => KeyFlavorS key
     -- ^ The type of key to serialize.
     -> raw
@@ -136,3 +144,20 @@ liftRawKeyNew = \case
     IcarusKeyS -> IcarusKey
     ShelleyKeyS -> ShelleyKey
     SharedKeyS -> SharedKey
+
+afterByron :: KeyFlavorS k
+    -> (AfterByron k ~ 'True => KeyFlavorS k -> x)
+    -> Maybe x
+afterByron x h = case x of
+    ByronKeyS -> Nothing
+    ShelleyKeyS -> Just $ h ShelleyKeyS
+    IcarusKeyS -> Just $ h IcarusKeyS
+    SharedKeyS -> Just $ h SharedKeyS
+
+hashVerificationKeyNew
+    :: KeyFlavorS k
+    -> KeyRole
+    -> k depth XPub
+    -> KeyHash
+hashVerificationKeyNew key keyRole =
+    KeyHash keyRole . blake2b224 . xpubPublicKey . getRawKeyNew key

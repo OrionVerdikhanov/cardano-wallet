@@ -430,8 +430,10 @@ import Cardano.Wallet.DB
 import Cardano.Wallet.Flavor
     ( KeyOf
     , StateWithAnyKey
+    , StateWithKey
     , WalletFlavor (..)
     , WalletFlavorS (ShelleyWallet)
+    , keyFlavorOfState
     )
 import Cardano.Wallet.Network
     ( NetworkLayer (..), fetchRewardAccountBalances, timeInterpreter )
@@ -1663,7 +1665,7 @@ putWalletPassphrase
         ( WalletKey k
         , ctx ~ ApiLayer s ktype
         , GetAccount s k
-        , k ~ KeyOf s
+        , StateWithKey s k
         , HardDerivation k
         )
     => ctx
@@ -1707,7 +1709,7 @@ putWalletPassphrase ctx createKey getKey (ApiT wid)
 
 putByronWalletPassphrase
     :: forall ctx s
-     . ( WalletKey (KeyOf s)
+     . ( StateWithAnyKey s
        , ctx ~ ApiLayer s 'CredFromKeyK
        )
     => ctx
@@ -2099,10 +2101,9 @@ signTransaction
     :: forall ctx s k ktype.
         ( ctx ~ ApiLayer s ktype
         , Bounded (Index (AddressIndexDerivationType k) (AddressCredential k))
-        , WalletKey k
         , IsOwned s k ktype
         , HardDerivation k
-        , k ~ KeyOf s
+        , StateWithKey s k
         , AccountIxForStaking s
         , ToWitnessCountCtx s
         )
@@ -2141,7 +2142,9 @@ signTransaction ctx (ApiT wid) body = do
 
                     era <- liftIO $ NW.currentNodeEra nl
                     let sealedTx = body ^. #transaction . #getApiT
-                    pure $ W.signTransaction tl era witCountCtx keyLookup
+                    pure $ W.signTransaction
+                        (keyFlavorOfState @s)
+                        tl era witCountCtx keyLookup
                         Nothing (rootK, pwdP) utxo accIxForStakingM sealedTx
 
     -- TODO: The body+witnesses seem redundant with the sealedTx already. What's
@@ -2160,14 +2163,12 @@ postTransactionOld
         , HasNetworkLayer IO ctx
         , IsOwned s k 'CredFromKeyK
         , Bounded (Index (AddressIndexDerivationType k) (AddressCredential k))
-        , WalletKey k
         , TxWitnessTagFor k
         , AddressBookIso s
-        , StateWithAnyKey s
+        , StateWithKey s k
         , HasDelegation s
         , WalletFlavor s n
         , IsOurs s RewardAccount
-        , k ~ KeyOf s
         )
     => ctx
     -> ArgGenChange s
@@ -3518,7 +3519,6 @@ joinStakePool
         , IsOwned s k 'CredFromKeyK
         , IsOurs (SeqState n k) RewardAccount
         , SoftDerivation k
-        , WalletKey k
         , AddressBookIso s
         , StateWithAnyKey s
         , HasDelegation s
