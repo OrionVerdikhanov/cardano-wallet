@@ -537,8 +537,6 @@ benchmarksRnd network w@(WalletLayer _ _ netLayer txLayer dbLayer) wname
         seed = dummySeedFromName $ getWalletName wname
         xprv = Byron.generateKeyFromSeed seed mempty
 
-
-
 data BenchSeqResults = BenchSeqResults
     { benchName :: Text
     , restoreTime :: Time
@@ -546,7 +544,7 @@ data BenchSeqResults = BenchSeqResults
     , listAddressesTime :: Time
     , listTransactionsTime :: Time
     , listTransactionsLimitedTime :: Time
-    , estimateFeesTime :: Time
+    , estimateFeesTime :: Either CannotEstimateFeeForWalletWithEmptyUTxO Time
     , walletOverview :: WalletOverview
     } deriving (Show, Generic)
 
@@ -554,6 +552,16 @@ instance Buildable BenchSeqResults where
     build = genericF
 
 instance ToJSON BenchSeqResults where
+    toJSON = genericToJSON Aeson.defaultOptions
+
+data CannotEstimateFeeForWalletWithEmptyUTxO =
+    CannotEstimateFeeForWalletWithEmptyUTxO
+    deriving (Show, Generic)
+
+instance Buildable CannotEstimateFeeForWalletWithEmptyUTxO where
+    build = genericF
+
+instance ToJSON CannotEstimateFeeForWalletWithEmptyUTxO where
     toJSON = genericToJSON Aeson.defaultOptions
 
 benchmarksSeq
@@ -599,7 +607,7 @@ benchmarksSeq network w@(WalletLayer _ _ netLayer txLayer dbLayer) _wname
         $ W.listTransactions @_ @s w Nothing Nothing Nothing Descending
             (Just 100)
 
-    (_, estimateFeesTime) <- bench "estimate tx fee" $ do
+    (_, estimateFeesTime') <- bench "estimate tx fee" $ do
         AnyRecentEra (recentEra :: Write.RecentEra era) <-
             guardIsRecentEra =<< currentNodeEra netLayer
         (protocolParameters, _bundledProtocolParameters) <-
@@ -627,7 +635,7 @@ benchmarksSeq network w@(WalletLayer _ _ netLayer txLayer dbLayer) _wname
         , listAddressesTime
         , listTransactionsTime
         , listTransactionsLimitedTime
-        , estimateFeesTime
+        , estimateFeesTime = Right estimateFeesTime'
         , walletOverview
         }
 
