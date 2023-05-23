@@ -3065,7 +3065,7 @@ balanceTransaction
     body = do
     -- NOTE: Ideally we'd read @pp@ and @era@ atomically.
     era <- liftIO $ NW.currentNodeEra netLayer
-    pp <- liftIO (currentProtocolParameters netLayer)
+    pp <- liftIO $ currentProtocolParameters netLayer
     Write.AnyRecentEra recentEra <- guardIsRecentEra era
 
     withWorkerCtx ctx wid liftE liftE $ \wrk -> do
@@ -3078,7 +3078,7 @@ balanceTransaction
                 :: forall era. Write.IsRecentEra era
                 => Write.PartialTx era
                 -> Handler (Cardano.Tx era)
-            balanceTx ptx =
+            balanceTx partialTx =
                 liftHandler $ fst <$> Write.balanceTransaction @_ @IO @s
                     (MsgWallet . W.MsgBalanceTx >$< wrk ^. W.logger)
                     (Write.UTxOAssumptions
@@ -3091,7 +3091,7 @@ balanceTransaction
                     (Write.constructUTxOIndex utxo)
                     (W.defaultChangeAddressGen argGenChange)
                     (getState wallet)
-                    ptx
+                    partialTx
 
         res <- Cardano.InAnyCardanoEra Write.cardanoEra <$> balanceTx partialTx
 
@@ -3119,7 +3119,7 @@ balanceTransaction
             . getApiT
             $ body ^. #transaction
 
-        return $ Write.PartialTx
+        pure $ Write.PartialTx
             tx
             externalUTxO
             (fromApiRedeemer <$> body ^. #redeemers)
