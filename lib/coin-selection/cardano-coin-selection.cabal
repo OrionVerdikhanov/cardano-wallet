@@ -53,6 +53,7 @@ library
     , lattices
     , math-functions
     , MonadRandom
+    , monoid-subclasses
     , QuickCheck
     , transformers
 
@@ -85,6 +86,7 @@ test-suite test
     , hspec-core
     , int-cast
     , lattices
+    , monoid-subclasses
     , pretty-simple
     , QuickCheck
     , quickcheck-classes

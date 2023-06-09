@@ -46,6 +46,8 @@ import Data.Map.Strict
     ( Map )
 import Data.Maybe
     ( isJust, isNothing )
+import Data.Monoid.Monus
+    ( Monus ((<\>)) )
 import Data.Ratio
     ( (%) )
 import Data.Word
@@ -279,7 +281,7 @@ prop_delete_balance u i =
         Nothing ->
             UTxOIndex.balance i
         Just b ->
-            UTxOIndex.balance i `TokenBundle.difference` b
+            UTxOIndex.balance i <\> b
 
 prop_delete_lookup
     :: u ~ Size 4 TestUTxO => u -> UTxOIndex u -> Property
@@ -318,7 +320,7 @@ prop_insert_balance u b i =
         Nothing ->
             UTxOIndex.balance i
         Just b' ->
-            UTxOIndex.balance i `TokenBundle.difference` b'
+            UTxOIndex.balance i <\> b'
 
 prop_insert_delete
     :: u ~ Size 4 TestUTxO => u -> TokenBundle -> UTxOIndex u -> Property

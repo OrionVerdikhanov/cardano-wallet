@@ -143,6 +143,8 @@ import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Maybe
     ( catMaybes, isJust )
+import Data.Monoid.Monus
+    ( Monus ((<\>)) )
 import Data.Quantity
     ( Quantity (..) )
 import Data.Set
@@ -2364,9 +2366,9 @@ prop_spendTx_balance tx u =
     lhs === rhs
   where
     lhs = balance (spendTx tx u)
-    rhs = TokenBundle.difference
-        (balance u)
-        (balance (u `UTxO.restrictedBy` inputsSpentByTx tx))
+    rhs =
+        balance u <\>
+        balance (u `UTxO.restrictedBy` inputsSpentByTx tx)
 
 prop_spendTx :: Tx -> UTxO -> Property
 prop_spendTx tx u =

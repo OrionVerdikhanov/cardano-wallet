@@ -163,6 +163,8 @@ import Data.Map.Strict
     ( Map )
 import Data.Maybe
     ( fromMaybe, isJust, isNothing, listToMaybe )
+import Data.Monoid.Monus
+    ( Monus ((<\>)) )
 import Data.Set
     ( Set )
 import Data.Tuple
@@ -2806,7 +2808,7 @@ prop_makeChange_success_delta p change =
             totalOutputValue
             (F.fold change)
 
-        delta = TokenBundle.difference totalInputValue totalOutputWithChange
+        delta = totalInputValue <\> totalOutputWithChange
     in
         (delta === TokenBundle.fromCoin (view #requiredCost p))
             & counterexample counterExampleText
@@ -2890,9 +2892,7 @@ prop_makeChange_fail_costTooBig
     -> Property
 prop_makeChange_fail_costTooBig p =
     let
-        deltaCoin = TokenBundle.getCoin $ TokenBundle.difference
-            totalInputValue
-            totalOutputValue
+        deltaCoin = TokenBundle.getCoin $ totalInputValue <\> totalOutputValue
     in
         deltaCoin < view #requiredCost p
             & counterexample ("delta: " <> pretty deltaCoin)
@@ -2947,9 +2947,8 @@ prop_makeChange_fail_minValueTooBig p =
                 , "totalMinCoinDeposit:"
                 , pretty totalMinCoinDeposit
                 ]
-            deltaCoin = TokenBundle.getCoin $ TokenBundle.difference
-                totalInputValue
-                totalOutputValue
+            deltaCoin = TokenBundle.getCoin $
+                totalInputValue <\> totalOutputValue
             minCoinValueFor =
                 unMockComputeMinimumAdaQuantity (minCoinFor p) (TestAddress 0x0)
             totalMinCoinDeposit = F.foldr Coin.add (Coin 0)

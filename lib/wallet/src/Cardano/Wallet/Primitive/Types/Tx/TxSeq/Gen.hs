@@ -64,6 +64,8 @@ import Data.Function
     ( on )
 import Data.Maybe
     ( fromMaybe, listToMaybe, mapMaybe )
+import Data.Monoid.Monus
+    ( Monus ((<\>)) )
 import Test.QuickCheck
     ( Gen, chooseInt, elements, frequency, sized, vectorOf )
 import Test.QuickCheck.Extra
@@ -302,7 +304,7 @@ genTxFromUTxO genAddr u = do
     feeCoin <-
         min (TokenBundle.coin inputValue) <$> chooseCoin (Coin 1, Coin 4)
     let inputValueMinusFee =
-            inputValue `TokenBundle.difference` TokenBundle.fromCoin feeCoin
+            inputValue <\> TokenBundle.fromCoin feeCoin
     outputBundles <-
         genTokenBundlePartitionNonNull inputValueMinusFee =<< chooseInt (1, 3)
     collateralOutputBundles <-

@@ -144,6 +144,7 @@ test-suite test
     , hspec-core
     , lattices
     , MonadRandom
+    , monoid-subclasses
     , QuickCheck
     , quickcheck-classes
     , quickcheck-instances
