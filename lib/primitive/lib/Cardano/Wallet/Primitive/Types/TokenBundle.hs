@@ -65,9 +65,6 @@ module Cardano.Wallet.Primitive.Types.TokenBundle
     -- * Transformations
     , mapAssetIds
 
-    -- * Unsafe operations
-    , unsafeSubtract
-
     ) where
 
 import Prelude hiding
@@ -118,8 +115,6 @@ import GHC.Generics
     ( Generic )
 import GHC.TypeLits
     ( ErrorMessage (..), TypeError )
-import Safe
-    ( fromJustNote )
 
 import qualified Cardano.Wallet.Primitive.Types.Coin as Coin
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as TokenMap
@@ -443,17 +438,3 @@ getAssets = TokenMap.getAssets . tokens
 
 mapAssetIds :: (AssetId -> AssetId) -> TokenBundle -> TokenBundle
 mapAssetIds f (TokenBundle c m) = TokenBundle c (TokenMap.mapAssetIds f m)
-
---------------------------------------------------------------------------------
--- Unsafe operations
---------------------------------------------------------------------------------
-
--- | Subtracts the second token bundle from the first.
---
--- Pre-condition: the second bundle is less than or equal to the first bundle
--- when compared with the `leq` function.
---
--- Throws a run-time exception if the pre-condition is violated.
---
-unsafeSubtract :: TokenBundle -> TokenBundle -> TokenBundle
-unsafeSubtract b1 b2 = fromJustNote "TokenBundle.unsafeSubtract" $ b1 </> b2
