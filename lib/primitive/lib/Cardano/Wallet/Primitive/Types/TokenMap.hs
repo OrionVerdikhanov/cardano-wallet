@@ -78,9 +78,6 @@ module Cardano.Wallet.Primitive.Types.TokenMap
     -- * Transformations
     , mapAssetIds
 
-    -- * Unsafe operations
-    , unsafeSubtract
-
     ) where
 
 import Prelude hiding
@@ -144,8 +141,6 @@ import Numeric.Natural
     ( Natural )
 import Quiet
     ( Quiet (..) )
-import Safe
-    ( fromJustNote )
 
 import qualified Cardano.Wallet.Primitive.Types.TokenQuantity as TokenQuantity
 import qualified Data.Aeson as Aeson
@@ -755,17 +750,3 @@ getAssets = Set.fromList . fmap fst . toFlatList
 
 mapAssetIds :: (AssetId -> AssetId) -> TokenMap -> TokenMap
 mapAssetIds f m = fromFlatList $ first f <$> toFlatList m
-
---------------------------------------------------------------------------------
--- Unsafe operations
---------------------------------------------------------------------------------
-
--- | Subtracts the second token map from the first.
---
--- Pre-condition: the second map is less than or equal to the first map when
--- compared with the `leq` function.
---
--- Throws a run-time exception if the pre-condition is violated.
---
-unsafeSubtract :: TokenMap -> TokenMap -> TokenMap
-unsafeSubtract b1 b2 = fromJustNote "TokenMap.unsafeSubtract" $ b1 </> b2
