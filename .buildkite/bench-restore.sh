@@ -17,7 +17,7 @@ total_time=restore-time.txt
 export TMPDIR="/$TMPDIR/bench/restore"
 mkdir -p $TMPDIR
 
-: "${node_db:=$HOME/node-db-$network}"
+: "${node_db:=$HOME/node-db-$network-8.10.7-8.1.1}"
 
 echo "--- Build"
 nix build .#ci.benchmarks.restore -o bench-restore
