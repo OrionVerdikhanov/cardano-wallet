@@ -4,8 +4,10 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Provides the 'TokenBundle' type, which combines a 'Coin' (lovelace) value
@@ -118,6 +120,8 @@ import GHC.Generics
     ( Generic )
 import GHC.TypeLits
     ( ErrorMessage (..), TypeError )
+import Iso.Deriving
+    ( As (..), Isomorphic (..), Inject (..), Project (..) )
 import Safe
     ( fromJustNote )
 
@@ -140,15 +144,14 @@ data TokenBundle = TokenBundle
     }
     deriving stock (Eq, Generic, Read, Show)
     deriving anyclass (NFData, Hashable)
+    deriving (Commutative, Semigroup, Monoid)
+        via ((Coin, TokenMap) `As` TokenBundle)
 
-instance Semigroup TokenBundle where
-    TokenBundle c1 m1 <> TokenBundle c2 m2 =
-        TokenBundle (c1 <> c2) (m1 <> m2)
-
-instance Commutative TokenBundle
-
-instance Monoid TokenBundle where
-    mempty = TokenBundle mempty mempty
+instance Inject (Coin, TokenMap) TokenBundle where
+    inj (c, m) = TokenBundle c m
+instance Project (Coin, TokenMap) TokenBundle where
+    prj (TokenBundle c m) = (c, m)
+instance Isomorphic (Coin, TokenMap) TokenBundle
 
 instance MonoidNull TokenBundle where
     null (TokenBundle c m) = null c && null m

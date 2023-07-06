@@ -62,6 +62,7 @@ library
     , generics-sop
     , hashable
     , int-cast
+    , iso-deriving
     , lattices
     , memory
     , MonadRandom
