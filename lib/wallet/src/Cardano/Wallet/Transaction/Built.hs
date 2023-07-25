@@ -1,15 +1,18 @@
 module Cardano.Wallet.Transaction.Built
-    ( BuiltTx (..)
-    ) where
-
-import Prelude
+  ( BuiltTx (..)
+  )
+where
 
 import Cardano.Wallet.Primitive.Types.Tx
-    ( SealedTx, Tx, TxMeta )
+  ( SealedTx
+  , Tx
+  , TxMeta
+  )
+import Prelude
 
 data BuiltTx = BuiltTx
-    { builtTx :: Tx
-    , builtTxMeta :: TxMeta
-    , builtSealedTx :: SealedTx
-    }
-    deriving (Show, Eq)
+  { builtTx :: Tx
+  , builtTxMeta :: TxMeta
+  , builtSealedTx :: SealedTx
+  }
+  deriving (Show, Eq)
