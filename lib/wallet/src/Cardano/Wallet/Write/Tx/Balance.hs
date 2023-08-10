@@ -263,6 +263,13 @@ data ErrBalanceTx
     | ErrBalanceTxUnresolvedInputs (NonEmpty W.TxIn)
     deriving (Show, Eq)
 
+data ErrBalanceTxOutputErrorIndexInfo =
+    ErrBalanceTxOutputErrorIndexInfo
+        { outputErrorIndex :: Int
+        , outputErrorInfo :: ErrBalanceTxOutputErrorInfo
+        }
+    deriving (Eq, Show)
+
 data ErrBalanceTxOutputErrorInfo
     = ErrBalanceTxOutputCoinInsufficientError
       ErrBalanceTxOutputCoinInsufficient
