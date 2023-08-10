@@ -261,6 +261,13 @@ data ErrBalanceTx
     | ErrBalanceTxUnresolvedInputs (NonEmpty W.TxIn)
     deriving (Show, Eq)
 
+data ErrBalanceTxOutputCoinInsufficient =
+    ErrBalanceTxOutputCoinInsufficient
+        { minimumExpectedCoin :: W.Coin
+        , output :: (W.Address, TokenBundle)
+        }
+    deriving (Eq, Show)
+
 -- | A 'PartialTx' is an an unbalanced 'SealedTx' along with the necessary
 -- information to balance it.
 --
