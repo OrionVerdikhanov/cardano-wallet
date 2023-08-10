@@ -268,6 +268,12 @@ data ErrBalanceTxOutputCoinInsufficient =
         }
     deriving (Eq, Show)
 
+newtype ErrBalanceTxOutputSizeExceedsLimit =
+    ErrBalanceTxOutputSizeExceedsLimit
+        { outputThatExceedsLimit :: (W.Address, TokenBundle)
+        }
+    deriving (Eq, Show)
+
 -- | A 'PartialTx' is an an unbalanced 'SealedTx' along with the necessary
 -- information to balance it.
 --
