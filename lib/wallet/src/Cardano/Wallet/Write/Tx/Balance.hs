@@ -263,6 +263,15 @@ data ErrBalanceTx
     | ErrBalanceTxUnresolvedInputs (NonEmpty W.TxIn)
     deriving (Show, Eq)
 
+data ErrBalanceTxOutputErrorInfo
+    = ErrBalanceTxOutputCoinInsufficientError
+      ErrBalanceTxOutputCoinInsufficient
+    | ErrBalanceTxOutputSizeExceedsLimitError
+      ErrBalanceTxOutputSizeExceedsLimit
+    | ErrBalanceTxOutputTokenQuantityExceedsLimitError
+      ErrBalanceTxOutputTokenQuantityExceedsLimit
+    deriving (Eq, Show)
+
 data ErrBalanceTxOutputCoinInsufficient =
     ErrBalanceTxOutputCoinInsufficient
         { minimumExpectedCoin :: W.Coin
