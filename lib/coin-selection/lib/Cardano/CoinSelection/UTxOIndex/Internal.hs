@@ -1,10 +1,13 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 {- HLINT ignore "Use &&" -}
 
 -- |
@@ -170,28 +173,66 @@ import qualified Data.Set as Set
 -- The UTxO index data structure has an invariant that can be checked with
 -- the 'checkInvariant' function.
 --
-data UTxOIndex u = UTxOIndex
+data UTxOIndexF c = UTxOIndex
     { indexAll
-        :: !(MonoidMap Asset (Set u))
+        :: !(MonoidMap (AssetId c) (Set (UTxOId c)))
         -- An index of all entries that contain the given asset.
     , indexSingletons
-        :: !(MonoidMap Asset (Set u))
+        :: !(MonoidMap (AssetId c) (Set (UTxOId c)))
         -- An index of all entries that contain the given asset and no other
-        -- assets.
+        -- assetIds.
     , indexPairs
-        :: !(MonoidMap Asset (Set u))
+        :: !(MonoidMap (AssetId c) (Set (UTxOId c)))
         -- An index of all entries that contain the given asset and exactly
         -- one other asset.
     , balance
-        :: !W.TokenBundle
+        :: !(Value c)
         -- The total balance of all entries.
     , universe
-        :: !(Map u W.TokenBundle)
+        :: !(Map (UTxOId c) (Value c))
         -- The complete set of all entries.
     }
-    deriving (Eq, Generic, Read, Show)
+    deriving Generic
 
-instance NFData u => NFData (UTxOIndex u)
+deriving instance
+    ( Eq (AssetId c)
+    , Eq (UTxOId c)
+    , Eq (Value c)
+    ) => Eq (UTxOIndexF c)
+
+deriving instance
+    ( NFData (AssetId c)
+    , NFData (UTxOId c)
+    , NFData (Value c)
+    ) => NFData (UTxOIndexF c)
+
+deriving instance
+    ( Ord (AssetId c)
+    , Ord (UTxOId c)
+    , Read (AssetId c)
+    , Read (UTxOId c)
+    , Read (Value c)
+    ) => Read (UTxOIndexF c)
+
+deriving instance
+    ( Show (AssetId c)
+    , Show (UTxOId c)
+    , Show (Value c)
+    ) => Show (UTxOIndexF c)
+
+type UTxOIndex u = UTxOIndexF (WalletContext u)
+
+class Context c where
+    type AssetId c
+    type UTxOId c
+    type Value c
+
+data WalletContext u
+
+instance Context (WalletContext u) where
+    type AssetId (WalletContext u) = Asset
+    type UTxOId (WalletContext u) = u
+    type Value (WalletContext u) = W.TokenBundle
 
 --------------------------------------------------------------------------------
 -- Construction
