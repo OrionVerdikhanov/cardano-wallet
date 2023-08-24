@@ -123,7 +123,7 @@ import Cardano.CoinSelection.Context
 import Cardano.CoinSelection.Size
     ( TokenBundleSizeAssessment (..), TokenBundleSizeAssessor (..) )
 import Cardano.CoinSelection.UTxOIndex
-    ( Asset (..), SelectionFilter (..), UTxOIndex (..) )
+    ( Asset (..), SelectionFilter (..), UTxOIndex )
 import Cardano.CoinSelection.UTxOSelection
     ( IsUTxOSelection, UTxOSelection, UTxOSelectionNonEmpty )
 import Cardano.Numeric.Util
