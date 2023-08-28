@@ -3,7 +3,7 @@ env:
   NIX_PATH: "channel:nixos-21.11"
 
   # Per-host variables - shared across containers on host
-  macos: "x86_64-darwin"
+  # macos: "arm64-darwin"
 
 steps:
   - label: 'Check auto-generated Nix on macos'
