@@ -1017,7 +1017,7 @@ instance IsServerError ErrBalanceTxInsufficientCollateralError where
             , "of pure ada UTxOs in your wallet is insufficient to cover"
             , "the minimum amount of collateral required."
             , "I need an ada amount of at least:"
-            , pretty (view #minimumSelectionAmount e)
+            , pretty (view #minimumCollateralAmount e)
             , "The largest combination of pure ada UTxOs I could find is:"
             , pretty (view #largestCombinationAvailable e)
             , "To fix this, you'll need to add one or more pure ada UTxOs"
