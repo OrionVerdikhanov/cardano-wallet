@@ -142,7 +142,7 @@ import Data.Text.Class
 import Data.Word
     ( Word32 )
 import Fmt
-    ( blockListF', build, fmt, listF, pretty )
+    ( blockListF', build, fmt, pretty )
 import Network.HTTP.Media
     ( renderHeader )
 import Network.HTTP.Types
@@ -173,8 +173,6 @@ import qualified Cardano.Wallet.Write.Tx as Write
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Foldable as F
-import qualified Data.List as L
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -1021,8 +1019,7 @@ instance IsServerError ErrBalanceTxInsufficientCollateralError where
             , "I need an ada amount of at least:"
             , pretty (view #minimumSelectionAmount e)
             , "The largest combination of pure ada UTxOs I could find is:"
-            , pretty $ listF $ L.sort $ F.toList $
-                view #largestCombinationAvailable e
+            , pretty (view #largestCombinationAvailable e)
             , "To fix this, you'll need to add one or more pure ada UTxOs"
             , "to your wallet that can cover the minimum amount required."
             ]
