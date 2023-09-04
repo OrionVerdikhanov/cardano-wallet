@@ -20,6 +20,7 @@ steps:
     command: 'GC_DONT_GC=1 nix build -L .#ci.${macos}.tests.run.integration'
     agents:
       system: ${macos}
+      queue: hal-mac
 
   - label: 'Restore benchmark - cardano mainnet'
     command: "./.buildkite/bench-restore.sh mainnet"
