@@ -215,8 +215,10 @@
             collectChecks
             check;
 
-          nodePkgs = cardano-node-runtime.legacyPackages.${system};
-          nodeProject = cardano-node-runtime.project.${system};
+          no-aarch64 = s: if s == "aarch64-darwin" then "x86_64-darwin" else s;
+
+          nodePkgs = cardano-node-runtime.legacyPackages.${no-aarch64 system};
+          nodeProject = cardano-node-runtime.project.${no-aarch64 system};
 
           project = (import ./nix/haskell.nix
               CHaP
