@@ -29,6 +29,8 @@ module Cardano.Wallet.Transaction
     , TxValidityInterval
     , TransactionCtx (..)
     , PreSelection (..)
+    , Selection
+    , SelectionOf (..)
     , selectionDelta
     , defaultTransactionCtx
     , Withdrawal (..)
@@ -83,6 +85,8 @@ import Cardano.Wallet.Primitive.Types.Hash
     ( Hash (..) )
 import Cardano.Wallet.Primitive.Types.RewardAccount
     ( RewardAccount )
+import Cardano.Wallet.Primitive.Types.TokenBundle
+    ( TokenBundle )
 import Cardano.Wallet.Primitive.Types.TokenMap
     ( AssetId, TokenMap )
 import Cardano.Wallet.Primitive.Types.TokenPolicy
@@ -242,6 +246,44 @@ data TransactionCtx = TransactionCtx
 newtype PreSelection = PreSelection { outputs :: [TxOut] }
     deriving stock (Generic, Show)
     deriving newtype (Eq)
+
+-- | Represents a balanced selection.
+--
+data SelectionOf change = Selection
+    { inputs
+        :: !(NonEmpty (TxIn, TxOut))
+        -- ^ Selected inputs.
+    , collateral
+        :: ![(TxIn, TxOut)]
+        -- ^ Selected collateral inputs.
+    , outputs
+        :: ![TxOut]
+        -- ^ User-specified outputs
+    , change
+        :: ![change]
+        -- ^ Generated change outputs.
+    , assetsToMint
+        :: !TokenMap
+        -- ^ Assets to mint.
+    , assetsToBurn
+        :: !TokenMap
+        -- ^ Assets to burn.
+    , extraCoinSource
+        :: !Coin
+        -- ^ An extra source of ada.
+    , extraCoinSink
+        :: !Coin
+        -- ^ An extra sink for ada.
+    }
+    deriving (Generic, Eq, Show)
+
+instance NFData change => NFData (SelectionOf change)
+
+-- | The default type of selection.
+--
+-- In this type of selection, change values do not have addresses assigned.
+--
+type Selection = SelectionOf TokenBundle
 
 -- | Computes the ada surplus of a selection, assuming there is a surplus.
 --
