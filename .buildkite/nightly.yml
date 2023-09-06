@@ -2,16 +2,12 @@ env:
   LC_ALL: "C.UTF-8"
   NIX_PATH: "channel:nixos-21.11"
 
-  # Per-host variables - shared across containers on host
-  macos: "arm64-darwin"
-
 steps:
   - label: 'Check auto-generated Nix on macos'
     key: macos-nix
     commands:
       - './nix/regenerate.sh'
     agents:
-      system: ${macos}
       queue: hal-mac
 
   # ADP-2522 - Fix integration tests on MacOS
@@ -19,7 +15,6 @@ steps:
     depends_on: macos-nix
     command: 'GC_DONT_GC=1 nix build -L .#ci.aarch64-darwin.tests.run.integration'
     agents:
-      system: ${macos}
       queue: hal-mac
 
   - label: 'Restore benchmark - cardano mainnet'
