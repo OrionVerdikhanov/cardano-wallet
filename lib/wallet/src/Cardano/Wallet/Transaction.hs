@@ -145,7 +145,7 @@ data TransactionLayer k ktype tx = TransactionLayer
             -- Current protocol parameters
         -> TransactionCtx
             -- An additional context about the transaction
-        -> CS.Internal.SelectionOf TxOut
+        -> SelectionOf TxOut
             -- A balanced coin selection where all change addresses have been
             -- assigned.
         -> Either ErrMkTransaction (Tx, tx)
@@ -186,7 +186,7 @@ data TransactionLayer k ktype tx = TransactionLayer
             -- Reward account public key or optional script hash
         -> TransactionCtx
             -- An additional context about the transaction
-        -> Either PreSelection (CS.Internal.SelectionOf TxOut)
+        -> Either PreSelection (SelectionOf TxOut)
             -- A balanced coin selection where all change addresses have been
             -- assigned.
         -> Either ErrMkTransaction (Cardano.TxBody era)
@@ -289,7 +289,7 @@ type Selection = SelectionOf TokenBundle
 --
 -- If there is no surplus, this function returns 'Coin 0'.
 --
-selectionDelta :: CS.Internal.SelectionOf TxOut -> Coin
+selectionDelta :: SelectionOf TxOut -> Coin
 selectionDelta selection =
     balanceIn <\> balanceOut
   where
@@ -303,7 +303,7 @@ selectionDelta selection =
         F.foldMap TxOut.coin change
         <>
         extraCoinSink
-    CS.Internal.Selection
+    Selection
         {inputs, outputs, change, extraCoinSource, extraCoinSink} = selection
 
 data Withdrawal
