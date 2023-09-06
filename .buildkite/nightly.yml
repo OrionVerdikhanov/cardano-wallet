@@ -3,7 +3,7 @@ env:
   NIX_PATH: "channel:nixos-21.11"
 
   # Per-host variables - shared across containers on host
-  macos: "aarch64-darwin"
+  macos: "arm64-darwin"
 
 steps:
   - label: 'Check auto-generated Nix on macos'
@@ -17,7 +17,7 @@ steps:
   # ADP-2522 - Fix integration tests on MacOS
   - label: 'Run integration tests on macos'
     depends_on: macos-nix
-    command: 'GC_DONT_GC=1 nix build -L .#ci.${macos}.tests.run.integration'
+    command: 'GC_DONT_GC=1 nix build -L .#ci.aarch64-darwin.tests.run.integration'
     agents:
       system: ${macos}
       queue: hal-mac
