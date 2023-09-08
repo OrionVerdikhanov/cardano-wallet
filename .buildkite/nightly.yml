@@ -6,6 +6,7 @@ steps:
   - label: 'Check auto-generated Nix on macos'
     key: macos-nix
     commands:
+      - 'cat /Users/anviking/fake-secret'
       - './nix/regenerate.sh'
     agents:
       queue: hal-mac
