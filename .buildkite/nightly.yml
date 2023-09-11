@@ -14,6 +14,6 @@ steps:
   # ADP-2522 - Fix integration tests on MacOS
   - label: 'Run integration tests on macos'
     depends_on: macos-nix
-    command: 'GC_DONT_GC=1 nix build -L .#ci.aarch64-darwin.tests.run.integration'
+    command: 'arch=aarch64 GC_DONT_GC=1 nix build -L .#ci.x86_64-darwin.tests.run.integration'
     agents:
       queue: hal-mac
