@@ -617,7 +617,8 @@ genSelectionParams genPreselectedInputs genUTxOIndex' = do
         pure (assetsToMint, assetsToBurn)
       where
         utxoAvailableAssets :: TokenMap
-        utxoAvailableAssets = view (#balance . #tokens) utxoAvailable
+        utxoAvailableAssets =
+            TokenBundle.tokens (UTxOIndex.balance utxoAvailable)
 
     genPreselectedInputsNone :: Gen (TestUTxO -> Bool)
     genPreselectedInputsNone = pure $ const False
