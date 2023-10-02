@@ -26,6 +26,7 @@ module Cardano.Wallet.Write.Tx.Balance
     (
     -- * Balancing transactions
       balanceTransaction
+    , balanceTxFFI
     , ErrBalanceTx (..)
     , ErrBalanceTxAssetsInsufficientError (..)
     , ErrBalanceTxInsufficientCollateralError (..)
@@ -77,6 +78,8 @@ module Cardano.Wallet.Write.Tx.Balance
 
 import Prelude
 
+import Cardano.Binary
+    ( unsafeDeserialize' )
 import Cardano.CoinSelection.Size
     ( TokenBundleSizeAssessment (..) )
 import Cardano.CoinSelection.UTxOSelection
@@ -128,6 +131,7 @@ import Cardano.Wallet.Write.Tx
     , TxBody
     , TxIn
     , TxOut
+    , TxOutInRecentEra
     , UTxO (..)
     , computeMinimumCoinForTxOut
     , evaluateMinimumFee
@@ -143,6 +147,7 @@ import Cardano.Wallet.Write.Tx
     , outputs
     , toCardanoValue
     , txBody
+    , utxoFromTxOutsInRecentEra
     , withConstraints
     )
 import Cardano.Wallet.Write.Tx.Balance.TokenBundleSize
@@ -171,6 +176,8 @@ import Data.Bifunctor
     ( bimap, second )
 import Data.Bits
     ( Bits )
+import Data.ByteString
+    ( ByteString )
 import Data.Either
     ( lefts, partitionEithers )
 import Data.Function
@@ -185,6 +192,8 @@ import Data.IntCast
     ( intCastMaybe )
 import Data.List.NonEmpty
     ( NonEmpty (..) )
+import Data.Map
+    ( Map )
 import Data.Maybe
     ( fromMaybe, mapMaybe )
 import Data.Type.Equality
@@ -400,6 +409,51 @@ toWalletUTxO
 toWalletUTxO era (UTxO m) = withConstraints era $ W.UTxO
     $ Map.mapKeys W.toWallet
     $ Map.map (toWalletTxOut era) m
+
+-- | Draft simplified balanceTx function for use with C FFI and JS
+balanceTxFFI
+    :: ByteString -- CBOR PParams, could use something else than cbor
+    -> TimeTranslation -- TODO: Hard-code and/or come up with neat encoding
+    -> Int -- Random seed
+    -> Map TxIn TxOutInRecentEra -- UTxO set
+    -> W.Address -- Change address (wrapped bytestring)
+    -> ByteString -- Tx
+    -> Either ErrBalanceTx ByteString -- Tx
+balanceTxFFI pparamsCbor timeTranslation seed utxo changeAddr txCbor
+    = (`evalRand` stdGenFromSeed (StdGenSeed $ toEnum seed)) $ runExceptT $ do
+        (transactionInEra, _nextChangeState) <-
+            balanceTransaction
+                AllKeyPaymentCredentials
+                (deserializePParams pparamsCbor)
+                timeTranslation
+                (constructUTxOIndex
+                    $ toWalletUTxO RecentEraBabbage
+                    $ utxoFromTxOutsInRecentEra RecentEraBabbage
+                    $ Map.toList utxo)
+                (simpleChangeAddressGen changeAddr)
+                ()
+                (PartialTx
+                    (deserializeBabbageTx txCbor)
+                    (Cardano.UTxO mempty)
+                    mempty)
+        pure $ serializeBabbageTx transactionInEra
+
+  where
+    deserializePParams :: ByteString -> ProtocolParameters Cardano.BabbageEra
+    deserializePParams = ProtocolParameters . unsafeDeserialize'
+
+    deserializeBabbageTx :: ByteString -> Cardano.Tx Cardano.BabbageEra
+    deserializeBabbageTx = either (error . show) id
+        . Cardano.deserialiseFromCBOR (Cardano.AsTx Cardano.AsBabbageEra)
+
+    serializeBabbageTx :: Cardano.Tx Cardano.BabbageEra -> ByteString
+    serializeBabbageTx = Cardano.serialiseToCBOR
+
+    simpleChangeAddressGen :: W.Address -> ChangeAddressGen ()
+    simpleChangeAddressGen addr = ChangeAddressGen
+        { getChangeAddressGen = \() -> (addr, ())
+        , maxLengthChangeAddress = addr
+        }
 
 balanceTransaction
     :: forall era m changeState.

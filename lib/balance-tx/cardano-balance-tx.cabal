@@ -52,6 +52,7 @@ library
     , cardano-ledger-babbage
     , cardano-ledger-binary
     , cardano-ledger-conway
+    , cardano-binary
     , cardano-ledger-core
     , cardano-ledger-mary
     , cardano-ledger-shelley
