@@ -613,8 +613,6 @@ instance Arbitrary AnyRecentEra where
 testTxLayer :: TransactionLayer ShelleyKey 'CredFromKeyK SealedTx
 testTxLayer = newTransactionLayer ShelleyKeyS Cardano.Mainnet
 
-newtype ForByron a = ForByron { getForByron :: a } deriving (Show, Eq)
-
 instance Arbitrary Cardano.NetworkId where
     arbitrary = oneof
         [ pure Cardano.Mainnet
