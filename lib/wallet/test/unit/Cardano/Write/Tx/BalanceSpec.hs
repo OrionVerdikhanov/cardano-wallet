@@ -31,13 +31,9 @@ import Prelude
 import Cardano.Address.Derivation
     ( XPrv, xprvFromBytes, xprvToBytes )
 import Cardano.Address.Script
-    ( KeyHash (..), KeyRole (Delegation, Payment, Policy), Script (..) )
+    ( KeyHash (..), KeyRole (Policy) )
 import Cardano.Api
-    ( AnyCardanoEra (..)
-    , CardanoEra (..)
-    , InAnyCardanoEra (..)
-    , IsCardanoEra (..)
-    )
+    ( CardanoEra (..), InAnyCardanoEra (..), IsCardanoEra (..) )
 import Cardano.Api.Gen
     ( genAddressByron
     , genAddressInEra
@@ -45,7 +41,6 @@ import Cardano.Api.Gen
     , genPaymentCredential
     , genSignedValue
     , genStakeAddressReference
-    , genTx
     , genTxForBalancing
     , genTxOut
     , genTxOutDatum
@@ -78,8 +73,6 @@ import Cardano.Ledger.Shelley.API
     ( StrictMaybe (SJust, SNothing), Withdrawals (..) )
 import Cardano.Mnemonic
     ( SomeMnemonic (SomeMnemonic), entropyToMnemonic, mkEntropy )
-import Cardano.Numeric.Util
-    ( power )
 import Cardano.Pool.Types
     ( PoolId (..) )
 import Cardano.Wallet
@@ -105,8 +98,6 @@ import Cardano.Wallet.Address.Keys.WalletKey
     ( getRawKey, publicKey )
 import Cardano.Wallet.Flavor
     ( KeyFlavorS (..) )
-import Cardano.Wallet.Gen
-    ( genMnemonic, genScript )
 import Cardano.Wallet.Primitive.Model
     ( Wallet (..), unsafeInitWallet )
 import Cardano.Wallet.Primitive.NetworkId
@@ -131,19 +122,15 @@ import Cardano.Wallet.Primitive.Types.Address
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..) )
 import Cardano.Wallet.Primitive.Types.Coin.Gen
-    ( genCoin, genCoinPositive, shrinkCoin, shrinkCoinPositive )
+    ( genCoinPositive, shrinkCoinPositive )
 import Cardano.Wallet.Primitive.Types.Credentials
     ( RootCredentials (..) )
 import Cardano.Wallet.Primitive.Types.Hash
     ( Hash (..), mockHash )
 import Cardano.Wallet.Primitive.Types.TokenBundle
-    ( AssetId, TokenBundle )
+    ( TokenBundle )
 import Cardano.Wallet.Primitive.Types.TokenBundle.Gen
     ( genTokenBundleSmallRange, shrinkTokenBundleSmallRange )
-import Cardano.Wallet.Primitive.Types.TokenPolicy
-    ( TokenName (UnsafeTokenName), TokenPolicyId )
-import Cardano.Wallet.Primitive.Types.TokenPolicy.Gen
-    ( genTokenPolicyId, shrinkTokenPolicyId )
 import Cardano.Wallet.Primitive.Types.Tx
     ( SealedTx (..)
     , TxMetadata (..)
@@ -160,8 +147,6 @@ import Cardano.Wallet.Primitive.Types.Tx.TxIn.Gen
     ( genTxIn )
 import Cardano.Wallet.Primitive.Types.Tx.TxOut
     ( TxOut (..) )
-import Cardano.Wallet.Primitive.Types.Tx.TxOut.Gen
-    ( genTxOutTokenBundle )
 import Cardano.Wallet.Primitive.Types.UTxO
     ( UTxO (..) )
 import Cardano.Wallet.Shelley.Compatibility
@@ -181,7 +166,7 @@ import Cardano.Wallet.Transaction
 import Cardano.Wallet.Unsafe
     ( unsafeFromHex )
 import Cardano.Write.Tx
-    ( AnyRecentEra (..), FeePerByte (..), RecentEra (..), recentEra )
+    ( AnyRecentEra (..), RecentEra (..), recentEra )
 import Cardano.Write.Tx.Balance
     ( ChangeAddressGen (..)
     , ErrAssignRedeemers (..)
@@ -192,7 +177,6 @@ import Cardano.Write.Tx.Balance
     , ErrUpdateSealedTx (..)
     , PartialTx (..)
     , Redeemer (..)
-    , TxFeeAndChange (..)
     , UTxOAssumptions (..)
     , balanceTransaction
     , constructUTxOIndex
@@ -210,7 +194,7 @@ import Control.Lens
 import Control.Monad
     ( forM, replicateM )
 import Control.Monad.Random
-    ( MonadRandom (..), Random (randomR, randomRs), evalRand, random, randoms )
+    ( evalRand )
 import Control.Monad.Trans.Except
     ( runExcept, runExceptT )
 import Control.Monad.Trans.State.Strict
@@ -231,8 +215,6 @@ import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Maybe
     ( fromJust, fromMaybe )
-import Data.Ord
-    ( comparing )
 import Data.Proxy
     ( Proxy (..) )
 import Data.Quantity
@@ -271,20 +253,16 @@ import Test.Hspec.Golden
     ( Golden (..) )
 import Test.QuickCheck
     ( Arbitrary (..)
-    , InfiniteList (..)
     , Property
     , arbitraryBoundedEnum
     , arbitraryPrintableChar
-    , arbitrarySizedNatural
     , choose
     , classify
     , conjoin
     , counterexample
     , elements
     , forAll
-    , frequency
     , label
-    , liftShrink2
     , listOf
     , oneof
     , property
@@ -293,18 +271,15 @@ import Test.QuickCheck
     , shrinkList
     , shrinkMapBy
     , tabulate
-    , vector
     , vectorOf
     , withMaxSuccess
     , (===)
     , (==>)
     )
 import Test.QuickCheck.Extra
-    ( chooseNatural, genNonEmpty, shrinkNatural, shrinkNonEmpty, (.>=.) )
+    ( (.>=.) )
 import Test.QuickCheck.Gen
-    ( Gen (..), listOf1 )
-import Test.QuickCheck.Random
-    ( QCGen )
+    ( Gen (..) )
 import Test.Utils.Paths
     ( getTestData )
 import Test.Utils.Pretty
@@ -328,7 +303,6 @@ import qualified Cardano.Wallet.Address.Derivation.Byron as Byron
 import qualified Cardano.Wallet.Address.Derivation.Shelley as Shelley
 import qualified Cardano.Wallet.Primitive.Types.Coin as Coin
 import qualified Cardano.Wallet.Primitive.Types.TokenBundle as TokenBundle
-import qualified Cardano.Wallet.Primitive.Types.Tx.TxOut.Gen as TxOutGen
 import qualified Cardano.Wallet.Shelley.Compatibility as Compatibility
 import qualified Cardano.Write.ProtocolParameters as Write
 import qualified Cardano.Write.Tx as Write
