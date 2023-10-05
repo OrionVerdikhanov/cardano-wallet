@@ -646,27 +646,6 @@ instance Arbitrary TokenBundle where
     arbitrary = genTokenBundleSmallRange
     shrink = shrinkTokenBundleSmallRange
 
-instance Arbitrary (Passphrase "user") where
-    arbitrary = do
-        n <- choose (passphraseMinLength p, passphraseMaxLength p)
-        bytes <- T.encodeUtf8 . T.pack <$> replicateM n arbitraryPrintableChar
-        return $ Passphrase $ BA.convert bytes
-      where p = Proxy :: Proxy "user"
-
-    shrink (Passphrase bytes)
-        | BA.length bytes <= passphraseMinLength p = []
-        | otherwise =
-            [ Passphrase
-            $ BA.convert
-            $ B8.take (passphraseMinLength p)
-            $ BA.convert bytes
-            ]
-      where p = Proxy :: Proxy "user"
-
-instance Arbitrary (Passphrase "encryption") where
-    arbitrary = preparePassphrase EncryptWithPBKDF2
-        <$> arbitrary @(Passphrase "user")
-
 instance Arbitrary (Quantity "byte" Word16) where
     arbitrary = Quantity <$> choose (128, 2_048)
     shrink (Quantity size)
