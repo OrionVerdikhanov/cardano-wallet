@@ -35,6 +35,8 @@ module Cardano.Wallet.Shelley.TransactionSpec (spec) where
 
 import Prelude
 
+import Cardano.Write.Tx.BalanceSpec
+    ( mockPParamsForBalancing )
 import Cardano.Address.Derivation
     ( XPrv, XPub, toXPub, xprvFromBytes, xprvToBytes, xpubPublicKey )
 import Cardano.Address.Script
@@ -952,12 +954,6 @@ instance Arbitrary AnyCardanoEra where
     -- Shrink by choosing a *later* era
     shrink e = map snd $ filter ((> eraNum e) . fst) allEras
 
-instance Arbitrary AnyRecentEra where
-    arbitrary = elements
-        [ AnyRecentEra RecentEraBabbage
-        , AnyRecentEra RecentEraConway
-        ]
-
 decodeSealedTxSpec :: Spec
 decodeSealedTxSpec = describe "SealedTx serialisation/deserialisation" $ do
     it "tx with withdrawal" $ do
@@ -1371,12 +1367,6 @@ instance Arbitrary (ForByron DecodeSetup) where
         test <- arbitrary
         pure $ ForByron (test { metadata = Nothing })
 
-instance Arbitrary Cardano.NetworkId where
-    arbitrary = oneof
-        [ pure Cardano.Mainnet
-        , Cardano.Testnet . Cardano.NetworkMagic <$> arbitrary
-        ]
-
 instance Arbitrary SlotNo where
     arbitrary = SlotNo <$> choose (1, 1_000)
 
@@ -1407,10 +1397,6 @@ instance Arbitrary TxOut where
         [ TxOut addr bundle'
         | bundle' <- shrinkTokenBundleSmallRange bundle
         ]
-
-instance Arbitrary TokenBundle where
-    arbitrary = genTokenBundleSmallRange
-    shrink = shrinkTokenBundleSmallRange
 
 instance Arbitrary TxMetadata where
     arbitrary = TxMetadata <$> arbitrary
@@ -1608,9 +1594,6 @@ instance Arbitrary KeyHash where
         cred <- oneof [pure Payment, pure Delegation]
         KeyHash cred . BS.pack <$> vectorOf 28 arbitrary
 
-instance Arbitrary StdGenSeed  where
-  arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
-
 distributeSurplusSpec :: Spec
 distributeSurplusSpec = do
     describe "sizeOfCoin" $ do
@@ -1679,6 +1662,8 @@ distributeSurplusSpec = do
               & property
       it "prop_distributeSurplus_onSuccess_coversCostIncrease" $
           prop_distributeSurplus_onSuccess_coversCostIncrease
+
+
               & property
       it "prop_distributeSurplus_onSuccess_doesNotReduceChangeCoinValues" $
           prop_distributeSurplus_onSuccess_doesNotReduceChangeCoinValues
@@ -2069,14 +2054,6 @@ instance MonadRandom Gen where
     getRandomR range = mkGen (fst . randomR range)
     getRandomRs range = mkGen (randomRs range)
 
-instance Buildable UTxOAssumptions where
-    build = \case
-        AllKeyPaymentCredentials -> "AllKeyPaymentCredentials"
-        AllByronKeyPaymentCredentials -> "AllByronKeyPaymentCredentials"
-        AllScriptPaymentCredentialsFrom scriptTemplate _scriptLookup ->
-            nameF "AllScriptPaymentCredentialsFrom" $
-                blockListF [ nameF "scriptTemplate" $ build scriptTemplate ]
-
 newtype ShowBuildable a = ShowBuildable a
     deriving newtype Arbitrary
 
@@ -2085,117 +2062,6 @@ instance Buildable a => Show (ShowBuildable a) where
 
 instance Arbitrary (Hash "Datum") where
     arbitrary = pure $ Hash $ BS.pack $ replicate 28 0
-
-instance IsCardanoEra era => Arbitrary (Cardano.AddressInEra era) where
-      arbitrary = genAddressInEra Cardano.cardanoEra
-
-instance IsCardanoEra era => Arbitrary (Cardano.TxOutDatum ctx era) where
-      arbitrary = genTxOutDatum Cardano.cardanoEra
-
-instance Semigroup (Cardano.UTxO era) where
-    Cardano.UTxO a <> Cardano.UTxO b = Cardano.UTxO (a <> b)
-
-instance Monoid (Cardano.UTxO era) where
-    mempty = Cardano.UTxO mempty
-
--- | We try to use similar parameters to mainnet where it matters (in particular
--- fees, execution unit prices, and the cost model.)
-mockCardanoApiPParamsForBalancing
-    :: Cardano.ProtocolParameters
-mockCardanoApiPParamsForBalancing = Cardano.ProtocolParameters
-    { Cardano.protocolParamTxFeeFixed = 155_381
-    , Cardano.protocolParamTxFeePerByte = 44
-    , Cardano.protocolParamMaxTxSize = 16_384
-    , Cardano.protocolParamMinUTxOValue = Nothing
-    , Cardano.protocolParamMaxTxExUnits =
-        Just $ Cardano.ExecutionUnits 10_000_000_000 14_000_000
-    , Cardano.protocolParamMaxValueSize = Just 4_000
-    , Cardano.protocolParamProtocolVersion = (6, 0)
-    , Cardano.protocolParamDecentralization = Just 0
-    , Cardano.protocolParamExtraPraosEntropy = Nothing
-    , Cardano.protocolParamMaxBlockHeaderSize = 100_000 -- Dummy value
-    , Cardano.protocolParamMaxBlockBodySize = 100_000
-    , Cardano.protocolParamStakeAddressDeposit = Cardano.Lovelace 2_000_000
-    , Cardano.protocolParamStakePoolDeposit = Cardano.Lovelace 500_000_000
-    , Cardano.protocolParamMinPoolCost = Cardano.Lovelace 32_000_000
-    , Cardano.protocolParamPoolRetireMaxEpoch = Cardano.EpochNo 2
-    , Cardano.protocolParamStakePoolTargetNum = 100
-    , Cardano.protocolParamPoolPledgeInfluence = 0
-    , Cardano.protocolParamMonetaryExpansion = 0
-    , Cardano.protocolParamTreasuryCut  = 0
-    , Cardano.protocolParamUTxOCostPerWord =
-        Just $ fromShelleyLovelace $
-            Alonzo.unCoinPerWord testParameter_coinsPerUTxOWord_Alonzo
-    , Cardano.protocolParamUTxOCostPerByte =
-        Just $ fromShelleyLovelace $
-            Babbage.unCoinPerByte testParameter_coinsPerUTxOByte_Babbage
-    , Cardano.protocolParamCostModels =
-        Cardano.fromAlonzoCostModels costModelsForTesting
-    , Cardano.protocolParamPrices =
-        Just $ Cardano.ExecutionUnitPrices (721 % 10_000_000) (577 % 10_000)
-    , Cardano.protocolParamMaxBlockExUnits =
-        Just $ Cardano.ExecutionUnits 10_000_000_000 14_000_000
-    , Cardano.protocolParamCollateralPercent = Just 150
-    , Cardano.protocolParamMaxCollateralInputs = Just 3
-    }
-
-testParameter_coinsPerUTxOWord_Alonzo :: Ledger.CoinPerWord
-testParameter_coinsPerUTxOWord_Alonzo
-    = Ledger.CoinPerWord $ Ledger.Coin 34_482
-
-testParameter_coinsPerUTxOByte_Babbage :: Ledger.CoinPerByte
-testParameter_coinsPerUTxOByte_Babbage
-    = Ledger.CoinPerByte $ Ledger.Coin 4_310
-
-mockPParamsForBalancing
-    :: forall era . Write.IsRecentEra era => Write.ProtocolParameters era
-mockPParamsForBalancing =
-    Write.ProtocolParameters . either (error . show) id $
-        Cardano.toLedgerPParams
-            (Write.shelleyBasedEra @era)
-            mockCardanoApiPParamsForBalancing
-
-costModelsForTesting :: Alonzo.CostModels
-costModelsForTesting = either (error . show) id $ do
-    v1 <- Alonzo.mkCostModel PlutusV1
-        [ 197209, 0, 1, 1, 396231, 621, 0, 1, 150000, 1000, 0, 1, 150000
-        , 32, 2477736, 29175, 4, 29773, 100, 29773, 100, 29773, 100
-        , 29773, 100, 29773, 100, 29773, 100, 100, 100, 29773, 100
-        , 150000, 32, 150000, 32, 150000, 32, 150000, 1000, 0, 1
-        , 150000, 32, 150000, 1000, 0, 8, 148000, 425507, 118, 0, 1, 1
-        , 150000, 1000, 0, 8, 150000, 112536, 247, 1, 150000, 10000, 1
-        , 136542, 1326, 1, 1000, 150000, 1000, 1, 150000, 32, 150000
-        , 32, 150000, 32, 1, 1, 150000, 1, 150000, 4, 103599, 248, 1
-        , 103599, 248, 1, 145276, 1366, 1, 179690, 497, 1, 150000, 32
-        , 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32
-        , 148000, 425507, 118, 0, 1, 1, 61516, 11218, 0, 1, 150000, 32
-        , 148000, 425507, 118, 0, 1, 1, 148000, 425507, 118, 0, 1, 1
-        , 2477736, 29175, 4, 0, 82363, 4, 150000, 5000, 0, 1, 150000
-        , 32, 197209, 0, 1, 1, 150000, 32, 150000, 32, 150000, 32, 150000
-        , 32, 150000, 32, 150000, 32, 150000, 32, 3345831, 1, 1
-        ]
-    v2 <- Alonzo.mkCostModel PlutusV2
-        [ 205665, 812, 1, 1, 1000, 571, 0, 1, 1000, 24177, 4, 1, 1000
-        , 32, 117366, 10475, 4, 23000, 100, 23000, 100, 23000, 100, 23000
-        , 100, 23000, 100, 23000, 100, 100, 100, 23000, 100, 19537, 32
-        , 175354, 32, 46417, 4, 221973, 511, 0, 1, 89141, 32, 497525, 14068
-        , 4, 2, 196500, 453240, 220, 0, 1, 1, 1000, 28662, 4, 2, 245000
-        , 216773, 62, 1, 1060367, 12586, 1, 208512, 421, 1, 187000, 1000
-        , 52998, 1, 80436, 32, 43249, 32, 1000, 32, 80556, 1, 57667, 4, 1000
-        , 10, 197145, 156, 1, 197145, 156, 1, 204924, 473, 1, 208896, 511, 1
-        , 52467, 32, 64832, 32, 65493, 32, 22558, 32, 16563, 32, 76511, 32
-        , 196500, 453240, 220, 0, 1, 1, 69522, 11687, 0, 1, 60091, 32, 196500
-        , 453240, 220, 0, 1, 1, 196500, 453240, 220, 0, 1, 1, 1159724, 392670
-        , 0, 2, 806990, 30482, 4, 1927926, 82523, 4, 265318, 0, 4, 0, 85931
-        , 32, 205665, 812, 1, 1, 41182, 32, 212342, 32, 31220, 32, 32696, 32
-        , 43357, 32, 32247, 32, 38314, 32, 20000000000, 20000000000, 9462713
-        , 1021, 10, 20000000000, 0, 20000000000
-        ]
-    pure Alonzo.CostModels
-        { costModelsValid = Map.fromList [(PlutusV1, v1), (PlutusV2, v2)]
-        , costModelsErrors = Map.empty
-        , costModelsUnknown = Map.empty
-        }
 
 updateTxSpec :: Spec
 updateTxSpec = describe "updateTx" $ do

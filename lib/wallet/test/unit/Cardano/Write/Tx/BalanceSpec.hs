@@ -24,7 +24,14 @@
 {-# OPTIONS_GHC -fno-warn-ambiguous-fields #-}
 #endif
 
-module Cardano.Write.Tx.BalanceSpec (spec) where
+module Cardano.Write.Tx.BalanceSpec
+    ( spec
+
+    -- TODO: ADP-3171
+    -- Remove all exports below once all balanceTx-related tests have been
+    -- relocated to this module:
+    , mockPParamsForBalancing
+    ) where
 
 import Prelude
 
