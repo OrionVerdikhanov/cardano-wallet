@@ -699,25 +699,6 @@ data DecodeSetup = DecodeSetup
     , network :: Cardano.NetworkId
     } deriving Show
 
-instance Arbitrary DecodeSetup where
-    arbitrary = do
-        utxo <- arbitrary
-        DecodeSetup utxo
-            <$> listOf1 arbitrary
-            <*> arbitrary
-            <*> arbitrary
-            <*> vectorOf (Map.size $ unUTxO utxo) arbitrary
-            <*> arbitrary
-
-    shrink (DecodeSetup i o m t k n) =
-        [ DecodeSetup i' o' m' t' k' n'
-        | (i',o',m',t',k',n') <- shrink (i,o,m,t,k,n) ]
-
-instance Arbitrary (ForByron DecodeSetup) where
-    arbitrary = do
-        test <- arbitrary
-        pure $ ForByron (test { metadata = Nothing })
-
 instance Arbitrary Cardano.NetworkId where
     arbitrary = oneof
         [ pure Cardano.Mainnet
