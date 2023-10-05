@@ -832,54 +832,15 @@ dummyShelleyChangeAddressGen = AnyChangeAddressGenWithState
     pwd = Passphrase ""
     rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) mempty
 
-instance Show AnyChangeAddressGenWithState where
-    show (AnyChangeAddressGenWithState (ChangeAddressGen gen _) s) =
-            show $ fst $ gen s
-
 --------------------------------------------------------------------------------
 -- Properties for 'distributeSurplus'
 --------------------------------------------------------------------------------
-
-instance Arbitrary FeePerByte where
-    arbitrary = frequency
-        [ (1, pure mainnetFeePerByte)
-        , (7, FeePerByte <$> arbitrarySizedNatural)
-        ]
-
-    shrink (FeePerByte x) =
-        FeePerByte <$> shrinkNatural x
 
 mainnetFeePerByte :: FeePerByte
 mainnetFeePerByte = FeePerByte 44
 
 newtype TxBalanceSurplus a = TxBalanceSurplus {unTxBalanceSurplus :: a}
     deriving (Eq, Show)
-
-instance Arbitrary (TxBalanceSurplus Coin) where
-    -- We want to test cases where the surplus is zero. So it's important that
-    -- we do not restrict ourselves to positive coins here.
-    arbitrary = TxBalanceSurplus <$> frequency
-        [ (8, genCoin)
-        , (4, genCoin & scale (* (2 `power`  4)))
-        , (2, genCoin & scale (* (2 `power`  8)))
-        , (1, genCoin & scale (* (2 `power` 16)))
-        ]
-    shrink = shrinkMapBy TxBalanceSurplus unTxBalanceSurplus shrinkCoin
-
-instance Arbitrary (TxFeeAndChange [TxOut]) where
-    arbitrary = do
-        fee <- genCoin
-        change <- frequency
-            [ (1, pure [])
-            , (1, (: []) <$> TxOutGen.genTxOut)
-            , (6, listOf TxOutGen.genTxOut)
-            ]
-        pure $ TxFeeAndChange fee change
-    shrink (TxFeeAndChange fee change) =
-        uncurry TxFeeAndChange <$> liftShrink2
-            (shrinkCoin)
-            (shrinkList TxOutGen.shrinkTxOut)
-            (fee, change)
 
 --------------------------------------------------------------------------------
 
