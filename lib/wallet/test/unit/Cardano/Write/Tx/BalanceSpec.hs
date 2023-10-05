@@ -656,16 +656,6 @@ instance Arbitrary (Quantity "byte" Word16) where
 -- Transaction constraints
 --------------------------------------------------------------------------------
 
-data MockSelection = MockSelection
-    { txInputCount :: Int
-    , txOutputs :: [TxOut]
-    , txRewardWithdrawal :: Coin
-    }
-    deriving (Eq, Show)
-
-newtype Large a = Large { unLarge :: a }
-    deriving (Eq, Show)
-
 instance Arbitrary StdGenSeed  where
   arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
 
