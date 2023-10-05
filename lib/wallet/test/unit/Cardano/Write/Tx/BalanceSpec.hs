@@ -1838,7 +1838,6 @@ prop_balanceTransactionValid
         valid out = counterexample msg $ property $
             not $ Write.isBelowMinimumCoinForTxOut era ledgerPParams out
           where
-
             msg = unwords
                 [ "ada quantity is"
                 , "below minimum requirement"
