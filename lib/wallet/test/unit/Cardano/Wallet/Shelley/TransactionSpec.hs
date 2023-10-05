@@ -38,7 +38,7 @@ import Prelude
 import Cardano.Address.Derivation
     ( XPrv, XPub, toXPub, xprvFromBytes, xprvToBytes, xpubPublicKey )
 import Cardano.Address.Script
-    ( KeyHash (..), KeyRole (Delegation, Payment, Policy), Script (..) )
+    ( KeyHash (..), KeyRole (Delegation, Payment), Script (..) )
 import Cardano.Api
     ( AnyCardanoEra (..)
     , CardanoEra (..)
@@ -136,15 +136,10 @@ import Cardano.Wallet.Shelley.Transaction
     , mkByronWitness
     , mkShelleyWitness
     , mkUnsignedTx
-    , newTransactionLayer
     , _decodeSealedTx
     )
 import Cardano.Wallet.Transaction
-    ( SelectionOf (..)
-    , TransactionLayer (..)
-    , WitnessCountCtx (..)
-    , selectionDelta
-    )
+    ( SelectionOf (..), WitnessCountCtx (..), selectionDelta )
 import Cardano.Wallet.Unsafe
     ( unsafeFromHex )
 import Cardano.Write.Tx
