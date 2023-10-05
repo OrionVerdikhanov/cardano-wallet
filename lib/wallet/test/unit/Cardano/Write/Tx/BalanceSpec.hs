@@ -651,34 +651,6 @@ balanceTransactionSpec = describe "balanceTransaction" $ do
     dummyAddr = Address $ unsafeFromHex
         "60b1e5e0fb74c86c801f646841e07cdb42df8b82ef3ce4e57cb5412e77"
 
-genRootKeysSeqWithPass
-    :: Passphrase "encryption"
-    -> Gen (ShelleyKey depth XPrv)
-genRootKeysSeqWithPass encryptionPass = do
-    s <- SomeMnemonic <$> genMnemonic @15
-    g <- Just . SomeMnemonic <$> genMnemonic @12
-    return $ Shelley.unsafeGenerateKeyFromSeed (s, g) encryptionPass
-
-genPassphrase :: (Int, Int) -> Gen (Passphrase purpose)
-genPassphrase range = do
-    n <- choose range
-    InfiniteList bytes _ <- arbitrary
-    return $ Passphrase $ BA.convert $ BS.pack $ take n bytes
-
-allEras :: [(Int, AnyCardanoEra)]
-allEras =
-    [ (1, AnyCardanoEra ByronEra)
-    , (2, AnyCardanoEra ShelleyEra)
-    , (3, AnyCardanoEra AllegraEra)
-    , (4, AnyCardanoEra MaryEra)
-    , (5, AnyCardanoEra AlonzoEra)
-    , (6, AnyCardanoEra BabbageEra)
-    , (7, AnyCardanoEra ConwayEra)
-    ]
-
-eraNum :: AnyCardanoEra -> Int
-eraNum e = fst $ head $ filter ((== e) . snd) allEras
-
 instance Arbitrary AnyRecentEra where
     arbitrary = elements
         [ AnyRecentEra RecentEraBabbage
@@ -1169,6 +1141,10 @@ shrinkStrictMaybe :: StrictMaybe a -> [StrictMaybe a]
 shrinkStrictMaybe = \case
     SNothing -> []
     SJust _ -> [SNothing]
+
+instance Arbitrary (Index 'WholeDomain depth) where
+    arbitrary = arbitraryBoundedEnum
+    shrink = shrinkBoundedEnum
 
 newtype DummyChangeState = DummyChangeState { nextUnusedIndex :: Int }
     deriving (Show, Eq)
@@ -2105,9 +2081,6 @@ dummyTimeTranslationWithHorizon horizon =
 --
 newtype ShowOrd a = ShowOrd { unShowOrd :: a }
     deriving (Eq, Show)
-
-instance (Eq a, Show a) => Ord (ShowOrd a) where
-    compare = comparing show
 
 dummyPolicyK :: KeyHash
 dummyPolicyK = KeyHash Policy (BS.replicate 32 0)
