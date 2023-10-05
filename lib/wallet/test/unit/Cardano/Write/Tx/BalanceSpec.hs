@@ -1170,10 +1170,6 @@ shrinkStrictMaybe = \case
     SNothing -> []
     SJust _ -> [SNothing]
 
-instance Arbitrary (Index 'WholeDomain depth) where
-    arbitrary = arbitraryBoundedEnum
-    shrink = shrinkBoundedEnum
-
 newtype DummyChangeState = DummyChangeState { nextUnusedIndex :: Int }
     deriving (Show, Eq)
 
