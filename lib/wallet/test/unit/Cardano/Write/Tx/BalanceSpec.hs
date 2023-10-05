@@ -785,32 +785,32 @@ instance IsCardanoEra era => Arbitrary (Cardano.TxOut ctx era) where
 -- NOTE: We should constrain by @IsRecentEra era@ instead, where @RecentEra@ is
 -- the two latest eras.
 instance IsCardanoEra era => Arbitrary (Cardano.TxOutValue era) where
-      arbitrary = case Cardano.cardanoEra @era of
-         Cardano.AlonzoEra ->
-             Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra
-                 <$> genValueForTxOut
-         Cardano.BabbageEra ->
-             Cardano.TxOutValue Cardano.MultiAssetInBabbageEra
-                 <$>  genValueForTxOut
-         e -> error $ mconcat
-             [ "Arbitrary (TxOutValue "
-             , show e
-             , ") not implemented)"
-             ]
+    arbitrary = case Cardano.cardanoEra @era of
+       Cardano.AlonzoEra ->
+           Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra
+               <$> genValueForTxOut
+       Cardano.BabbageEra ->
+           Cardano.TxOutValue Cardano.MultiAssetInBabbageEra
+               <$>  genValueForTxOut
+       e -> error $ mconcat
+           [ "Arbitrary (TxOutValue "
+           , show e
+           , ") not implemented)"
+           ]
 
-      shrink (Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra val) =
-          map
-              (Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra
-                  . toCardanoValue)
-              (shrink $ Compatibility.fromCardanoValue val)
+    shrink (Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra val) =
+        map
+            (Cardano.TxOutValue Cardano.MultiAssetInAlonzoEra
+                . toCardanoValue)
+            (shrink $ Compatibility.fromCardanoValue val)
 
-      shrink (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra val) =
-          map
-              (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra
-                  . toCardanoValue)
-              (shrink $ fromCardanoValue val)
-      shrink _ =
-        error "Arbitrary (TxOutValue era) is not implemented for old eras"
+    shrink (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra val) =
+        map
+            (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra
+                . toCardanoValue)
+            (shrink $ fromCardanoValue val)
+    shrink _ =
+      error "Arbitrary (TxOutValue era) is not implemented for old eras"
 
 instance Arbitrary (PartialTx Cardano.BabbageEra) where
     arbitrary = do
