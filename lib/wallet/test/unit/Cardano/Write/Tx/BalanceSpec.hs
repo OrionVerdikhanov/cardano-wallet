@@ -479,52 +479,8 @@ import qualified Ouroboros.Consensus.HardFork.History as HF
 import qualified Test.Hspec.Extra as Hspec
 
 spec :: Spec
-spec = describe "TransactionSpec" $ do
-    decodeSealedTxSpec
-    feeEstimationRegressionSpec
-    forAllRecentEras binaryCalculationsSpec
-    transactionConstraintsSpec
-    updateTxSpec
+spec = do
     balanceTransactionSpec
-    distributeSurplusSpec
-    estimateSignedTxSizeSpec
-    describe "Sign transaction" $ do
-        -- TODO [ADP-2849] The implementation must be restricted to work only in
-        -- 'RecentEra's, not just the tests.
-        spec_forAllRecentErasPendingConway
-            "signTransaction adds reward account witness when necessary"
-            prop_signTransaction_addsRewardAccountKey
-        spec_forAllRecentErasPendingConway
-            "signTransaction adds extra key witnesses when necessary"
-            prop_signTransaction_addsExtraKeyWitnesses
-        spec_forAllRecentErasPendingConway
-            "signTransaction adds tx in witnesses when necessary"
-            prop_signTransaction_addsTxInWitnesses
-        spec_forAllRecentErasPendingConway
-            "signTransaction adds collateral witnesses when necessary"
-            prop_signTransaction_addsTxInCollateralWitnesses
-        spec_forAllRecentErasPendingConway
-            "signTransaction never removes witnesses"
-            prop_signTransaction_neverRemovesWitnesses
-        spec_forAllRecentErasPendingConway
-            "signTransaction never changes tx body"
-            prop_signTransaction_neverChangesTxBody
-        spec_forAllRecentErasPendingConway
-            "signTransaction preserves script integrity"
-            prop_signTransaction_preservesScriptIntegrity
-
-spec_forAllRecentErasPendingConway
-    :: Testable prop => String -> (AnyCardanoEra -> prop) -> Spec
-spec_forAllRecentErasPendingConway description p =
-    describe description $
-    forAllRecentEras'
-        $ \(AnyCardanoEra era) ->
-            if AnyCardanoEra era == AnyCardanoEra ConwayEra
-            then it (show era) $ pendingWith "TODO: Conway"
-            else it (show era) $ property $ p (AnyCardanoEra era)
-  where
-    forAllRecentEras' f = forAllRecentEras $ \(AnyRecentEra era) ->
-        f $ AnyCardanoEra $ Write.cardanoEraFromRecentEra era
 
 instance Arbitrary SealedTx where
     arbitrary = sealedTxFromCardano <$> genTx
@@ -591,73 +547,6 @@ mkCredentials
     -> ClearCredentials ShelleyKey
 mkCredentials (pk, hpwd) = RootCredentials (liftRawKey ShelleyKeyS pk) hpwd
 
-prop_signTransaction_addsRewardAccountKey
-    :: AnyCardanoEra
-    -- ^ Era
-    -> (XPrv, Passphrase "encryption")
-    -- ^ Root key of wallet
-    -> UTxO
-    -- ^ UTxO of wallet
-    -> Coin
-    -- ^ Amount to withdraw
-    -> Property
-prop_signTransaction_addsRewardAccountKey
-    (AnyCardanoEra era) rootXPrv utxo wdrlAmt =
-    withMaxSuccess 10 $
-    whenSupportedInEra Cardano.withdrawalsSupportedInEra era $
-    \(supported :: Cardano.WithdrawalsSupportedInEra era) -> do
-        let
-            creds@(RootCredentials pk hpwd) = mkCredentials rootXPrv
-
-            rawRewardK :: (XPrv, Passphrase "encryption")
-            rawRewardK =
-                ( getRawKey ShelleyKeyS
-                    $ deriveRewardAccount hpwd pk minBound
-                , hpwd
-                )
-
-            rewardAcctPubKey :: XPub
-            rewardAcctPubKey = toXPub $ fst rawRewardK
-
-            extraWdrls =
-                [ withdrawalForKey SL.Mainnet rewardAcctPubKey
-                    (toCardanoLovelace wdrlAmt)
-                ]
-
-            addWithdrawals
-                :: Cardano.TxBodyContent Cardano.BuildTx era
-                -> Cardano.TxBodyContent Cardano.BuildTx era
-            addWithdrawals txBodyContent = txBodyContent
-                { Cardano.txWithdrawals =
-                    case Cardano.txWithdrawals txBodyContent of
-                        Cardano.TxWithdrawalsNone ->
-                            Cardano.TxWithdrawals supported extraWdrls
-                        Cardano.TxWithdrawals _ wdrls ->
-                            Cardano.TxWithdrawals supported $
-                            wdrls <> extraWdrls
-                }
-
-        withBodyContent era addWithdrawals $ \(txBody, wits) -> do
-            let
-                tl = testTxLayer
-
-                sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-                sealedTx' = signTransaction ShelleyKeyS
-                    tl (AnyCardanoEra era) AnyWitnessCountCtx
-                    (const Nothing) Nothing creds utxo Nothing sealedTx
-
-                expectedWits :: [InAnyCardanoEra Cardano.KeyWitness]
-                expectedWits = InAnyCardanoEra era <$>
-                    case Cardano.cardanoEraStyle era of
-                        LegacyByronEra -> error $ unwords
-                            [ "Withdrawal witnesses are not supported in the"
-                            , "Byron era."
-                            ]
-                        ShelleyBasedEra _ ->
-                            [mkShelleyWitness txBody rawRewardK]
-
-            expectedWits `checkSubsetOf` (getSealedTxWitnesses sealedTx')
-
 instance Arbitrary (ShelleyKey 'RootK XPrv) where
     shrink _ = []
     arbitrary = genRootKeysSeqWithPass =<< genPassphrase (0, 16)
@@ -675,69 +564,6 @@ genPassphrase range = do
     n <- choose range
     InfiniteList bytes _ <- arbitrary
     return $ Passphrase $ BA.convert $ BS.pack $ take n bytes
-
-prop_signTransaction_addsExtraKeyWitnesses
-    :: AnyCardanoEra
-    -- ^ Era
-    -> (XPrv, Passphrase "encryption")
-    -- ^ Root key of wallet
-    -> UTxO
-    -- ^ UTxO of wallet
-    -> [(XPrv, Passphrase "encryption")]
-    -- ^ Keys
-    -> Property
-prop_signTransaction_addsExtraKeyWitnesses
-    (AnyCardanoEra era) rootK utxo extraKeys =
-    withMaxSuccess 10 $
-    whenSupportedInEra Cardano.extraKeyWitnessesSupportedInEra era $
-    \(supported :: Cardano.TxExtraKeyWitnessesSupportedInEra era) -> do
-    let
-        keys
-            :: (XPrv, Passphrase "encryption")
-            -> Cardano.SigningKey Cardano.PaymentExtendedKey
-        keys = Cardano.PaymentExtendedSigningKey . fst
-
-        hashes :: [Cardano.Hash Cardano.PaymentKey]
-        hashes =
-            ( Cardano.verificationKeyHash
-            . Cardano.castVerificationKey
-            . Cardano.getVerificationKey
-            . keys
-            ) <$> extraKeys
-
-        addExtraWits
-            :: Cardano.TxBodyContent Cardano.BuildTx era
-            -> Cardano.TxBodyContent Cardano.BuildTx era
-        addExtraWits txBodyContent = txBodyContent
-            { Cardano.txExtraKeyWits =
-                Cardano.TxExtraKeyWitnesses supported hashes
-            }
-
-    withBodyContent era addExtraWits $ \(txBody, wits) -> do
-        let
-            tl = testTxLayer
-
-            sealedTx = sealedTxFromCardano' $ Cardano.Tx txBody wits
-            sealedTx' = signTransaction ShelleyKeyS tl
-                (AnyCardanoEra era)
-                AnyWitnessCountCtx
-                (lookupFnFromKeys extraKeys)
-                Nothing
-                (mkCredentials rootK)
-                utxo
-                Nothing
-                sealedTx
-
-            expectedWits :: [InAnyCardanoEra Cardano.KeyWitness]
-            expectedWits = InAnyCardanoEra era <$>
-                case Cardano.cardanoEraStyle era of
-                    LegacyByronEra ->
-                        -- signTransaction does nothing in Byron era
-                        []
-                    ShelleyBasedEra _ ->
-                        mkShelleyWitness txBody <$> extraKeys
-
-        expectedWits `checkSubsetOf` (getSealedTxWitnesses sealedTx')
 
 instance Arbitrary a => Arbitrary (NonEmpty a) where
     arbitrary = genNonEmpty arbitrary
