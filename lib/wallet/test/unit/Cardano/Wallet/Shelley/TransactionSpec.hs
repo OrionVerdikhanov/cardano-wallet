@@ -35,8 +35,6 @@ module Cardano.Wallet.Shelley.TransactionSpec (spec) where
 
 import Prelude
 
-import Cardano.Write.Tx.BalanceSpec
-    ( mockPParamsForBalancing )
 import Cardano.Address.Derivation
     ( XPrv, XPub, toXPub, xprvFromBytes, xprvToBytes, xpubPublicKey )
 import Cardano.Address.Script
@@ -51,20 +49,14 @@ import Cardano.Api
     , ShelleyBasedEra (..)
     )
 import Cardano.Api.Gen
-    ( genAddressInEra
-    , genEncodingBoundaryLovelace
+    ( genEncodingBoundaryLovelace
     , genTx
     , genTxBodyContent
     , genTxInEra
-    , genTxOutDatum
     , genWitnesses
     )
-import Cardano.Api.Shelley
-    ( fromShelleyLovelace )
 import Cardano.Ledger.Api
     ( bootAddrTxWitsL, scriptTxWitsL, witsTxL )
-import Cardano.Ledger.Language
-    ( Language (..) )
 import Cardano.Mnemonic
     ( SomeMnemonic (SomeMnemonic) )
 import Cardano.Numeric.Util
@@ -171,7 +163,6 @@ import Cardano.Write.Tx.Balance
     , TxFeeAndChange (..)
     , TxFeeUpdate (..)
     , TxUpdate (..)
-    , UTxOAssumptions (..)
     , costOfIncreasingCoin
     , distributeSurplus
     , distributeSurplusDelta
@@ -180,6 +171,8 @@ import Cardano.Write.Tx.Balance
     , sizeOfCoin
     , updateTx
     )
+import Cardano.Write.Tx.BalanceSpec
+    ( mockPParamsForBalancing )
 import Cardano.Write.Tx.Sign
     ( estimateKeyWitnessCount, estimateSignedTxSize )
 import Cardano.Write.Tx.SizeEstimation
@@ -224,8 +217,6 @@ import Data.Proxy
     ( Proxy (..) )
 import Data.Quantity
     ( Quantity (..) )
-import Data.Ratio
-    ( (%) )
 import Data.Semigroup
     ( mtimesDefault )
 import Data.Set
@@ -233,7 +224,7 @@ import Data.Set
 import Data.Word
     ( Word16, Word64, Word8 )
 import Fmt
-    ( Buildable (..), blockListF, nameF, pretty, (+||), (||+) )
+    ( Buildable (..), pretty, (+||), (||+) )
 import GHC.Stack
     ( HasCallStack )
 import Numeric.Natural
@@ -244,8 +235,6 @@ import System.Directory
     ( listDirectory )
 import System.FilePath
     ( takeExtension, (</>) )
-import System.Random.StdGenSeed
-    ( StdGenSeed (..) )
 import Test.Hspec
     ( Spec
     , describe
@@ -272,7 +261,6 @@ import Test.QuickCheck
     , conjoin
     , counterexample
     , cover
-    , elements
     , forAll
     , forAllShow
     , frequency
@@ -308,10 +296,6 @@ import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
-import qualified Cardano.Ledger.Alonzo.Core as Alonzo
-import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import qualified Cardano.Ledger.Babbage.Core as Babbage
-import qualified Cardano.Ledger.Babbage.Core as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Crypto as Crypto
 import qualified Cardano.Ledger.Shelley.API as SL

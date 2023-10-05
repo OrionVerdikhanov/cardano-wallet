@@ -1406,29 +1406,29 @@ dummyChangeAddrGen = ChangeAddressGen
         (addressAtIx $ toEnum i, DummyChangeState $ succ i)
     , maxLengthChangeAddress = addressAtIx minBound
     }
-      where
-        addressAtIx
-            :: Index
-                'Cardano.Wallet.Address.Derivation.Soft
-                'CredFromKeyK
-            -> Write.Address
-        addressAtIx ix = toLedgerAddress
-            $ paymentAddress @ShelleyKey @'CredFromKeyK SMainnet
-            $ publicKey ShelleyKeyS
-            $ Shelley.ShelleyKey
-            $ Shelley.deriveAddressPrivateKeyShelley
-                pwd
-                acctK
-                Cardano.Wallet.Address.Derivation.UtxoInternal
-                ix
-
-        pwd = Passphrase ""
-        rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) pwd
-        acctK = Shelley.deriveAccountPrivateKeyShelley
-            purposeBIP44
+  where
+    addressAtIx
+        :: Index
+            'Cardano.Wallet.Address.Derivation.Soft
+            'CredFromKeyK
+        -> Write.Address
+    addressAtIx ix = toLedgerAddress
+        $ paymentAddress @ShelleyKey @'CredFromKeyK SMainnet
+        $ publicKey ShelleyKeyS
+        $ Shelley.ShelleyKey
+        $ Shelley.deriveAddressPrivateKeyShelley
             pwd
-            (getRawKey ShelleyKeyS rootK)
-            minBound
+            acctK
+            Cardano.Wallet.Address.Derivation.UtxoInternal
+            ix
+
+    pwd = Passphrase ""
+    rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) pwd
+    acctK = Shelley.deriveAccountPrivateKeyShelley
+        purposeBIP44
+        pwd
+        (getRawKey ShelleyKeyS rootK)
+        minBound
 
 dummyMnemonic :: SomeMnemonic
 dummyMnemonic = SomeMnemonic $ either (error . show) id
