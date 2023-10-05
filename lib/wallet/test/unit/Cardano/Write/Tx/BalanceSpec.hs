@@ -349,317 +349,9 @@ spec :: Spec
 spec = do
     balanceTransactionSpec
 
-instance Arbitrary SealedTx where
-    arbitrary = sealedTxFromCardano <$> genTx
-
-instance Arbitrary (ShelleyKey 'RootK XPrv) where
-    shrink _ = []
-    arbitrary = genRootKeysSeqWithPass =<< genPassphrase (0, 16)
-
-genRootKeysSeqWithPass
-    :: Passphrase "encryption"
-    -> Gen (ShelleyKey depth XPrv)
-genRootKeysSeqWithPass encryptionPass = do
-    s <- SomeMnemonic <$> genMnemonic @15
-    g <- Just . SomeMnemonic <$> genMnemonic @12
-    return $ Shelley.unsafeGenerateKeyFromSeed (s, g) encryptionPass
-
-genPassphrase :: (Int, Int) -> Gen (Passphrase purpose)
-genPassphrase range = do
-    n <- choose range
-    InfiniteList bytes _ <- arbitrary
-    return $ Passphrase $ BA.convert $ BS.pack $ take n bytes
-
-instance Arbitrary a => Arbitrary (NonEmpty a) where
-    arbitrary = genNonEmpty arbitrary
-    shrink = shrinkNonEmpty shrink
-
-allEras :: [(Int, AnyCardanoEra)]
-allEras =
-    [ (1, AnyCardanoEra ByronEra)
-    , (2, AnyCardanoEra ShelleyEra)
-    , (3, AnyCardanoEra AllegraEra)
-    , (4, AnyCardanoEra MaryEra)
-    , (5, AnyCardanoEra AlonzoEra)
-    , (6, AnyCardanoEra BabbageEra)
-    , (7, AnyCardanoEra ConwayEra)
-    ]
-
-eraNum :: AnyCardanoEra -> Int
-eraNum e = fst $ head $ filter ((== e) . snd) allEras
-
-instance Arbitrary AnyCardanoEra where
-    arbitrary = frequency $ zip [1..] $ map (pure . snd) allEras
-    -- Shrink by choosing a *later* era
-    shrink e = map snd $ filter ((> eraNum e) . fst) allEras
-
-instance Arbitrary AnyRecentEra where
-    arbitrary = elements
-        [ AnyRecentEra RecentEraBabbage
-        , AnyRecentEra RecentEraConway
-        ]
-
 --------------------------------------------------------------------------------
--- Roundtrip tests for SealedTx
+-- balanceTransaction
 --------------------------------------------------------------------------------
-
-testTxLayer :: TransactionLayer ShelleyKey 'CredFromKeyK SealedTx
-testTxLayer = newTransactionLayer ShelleyKeyS Cardano.Mainnet
-
-newtype ForByron a = ForByron { getForByron :: a } deriving (Show, Eq)
-
-data DecodeSetup = DecodeSetup
-    { inputs :: UTxO
-    , outputs :: [TxOut] -- TODO: add datums
-    , metadata :: Maybe TxMetadata
-    , ttl :: SlotNo
-    , keyPasswd :: [(XPrv, Passphrase "encryption")]
-    , network :: Cardano.NetworkId
-    } deriving Show
-
-instance Arbitrary DecodeSetup where
-    arbitrary = do
-        utxo <- arbitrary
-        DecodeSetup utxo
-            <$> listOf1 arbitrary
-            <*> arbitrary
-            <*> arbitrary
-            <*> vectorOf (Map.size $ unUTxO utxo) arbitrary
-            <*> arbitrary
-
-    shrink (DecodeSetup i o m t k n) =
-        [ DecodeSetup i' o' m' t' k' n'
-        | (i',o',m',t',k',n') <- shrink (i,o,m,t,k,n) ]
-
-instance Arbitrary (ForByron DecodeSetup) where
-    arbitrary = do
-        test <- arbitrary
-        pure $ ForByron (test { metadata = Nothing })
-
-instance Arbitrary Cardano.NetworkId where
-    arbitrary = oneof
-        [ pure Cardano.Mainnet
-        , Cardano.Testnet . Cardano.NetworkMagic <$> arbitrary
-        ]
-
-instance Arbitrary SlotNo where
-    arbitrary = SlotNo <$> choose (1, 1_000)
-
-instance Arbitrary TxIn where
-    arbitrary = do
-        ix <- scale (`mod` 3) arbitrary
-        txId <- arbitrary
-        pure $ TxIn txId ix
-
-instance Arbitrary (Hash "Tx") where
-    arbitrary = do
-        bs <- vectorOf 32 arbitrary
-        pure $ Hash $ BS.pack bs
-
--- Coins (quantities of lovelace) must be strictly positive when included in
--- transactions.
---
-instance Arbitrary Coin where
-    arbitrary = genCoinPositive
-    shrink = shrinkCoinPositive
-
-instance Arbitrary TxOut where
-    arbitrary =
-        TxOut addr <$> scale (`mod` 4) genTokenBundleSmallRange
-      where
-        addr = Address $ BS.pack (1:replicate 56 0)
-    shrink (TxOut addr bundle) =
-        [ TxOut addr bundle'
-        | bundle' <- shrinkTokenBundleSmallRange bundle
-        ]
-
-instance Arbitrary TokenBundle where
-    arbitrary = genTokenBundleSmallRange
-    shrink = shrinkTokenBundleSmallRange
-
-instance Arbitrary TxMetadata where
-    arbitrary = TxMetadata <$> arbitrary
-    shrink (TxMetadata md) = TxMetadata <$> shrink md
-
-instance Arbitrary TxMetadataValue where
-    -- Note: test generation at the integration level is very simple. More
-    -- detailed metadata tests are done at unit level.
-    arbitrary = TxMetaNumber <$> arbitrary
-
-instance Arbitrary UTxO where
-    arbitrary = do
-        n <- choose (1,10)
-        inps <- vectorOf n arbitrary
-        let addr = Address $ BS.pack (1:replicate 56 0)
-        coins <- vectorOf n arbitrary
-        let outs = map (TxOut addr) coins
-        pure $ UTxO $ Map.fromList $ zip inps outs
-
-instance Arbitrary XPrv where
-    arbitrary = fromJust . xprvFromBytes . BS.pack <$> vectorOf 96 arbitrary
-
--- Necessary unsound Show instance for QuickCheck failure reporting
-instance Show XPrv where
-    show = show . xprvToBytes
-
--- Necessary unsound Eq instance for QuickCheck properties
-instance Eq XPrv where
-    (==) = (==) `on` xprvToBytes
-
-instance Arbitrary (Passphrase "user") where
-    arbitrary = do
-        n <- choose (passphraseMinLength p, passphraseMaxLength p)
-        bytes <- T.encodeUtf8 . T.pack <$> replicateM n arbitraryPrintableChar
-        return $ Passphrase $ BA.convert bytes
-      where p = Proxy :: Proxy "user"
-
-    shrink (Passphrase bytes)
-        | BA.length bytes <= passphraseMinLength p = []
-        | otherwise =
-            [ Passphrase
-            $ BA.convert
-            $ B8.take (passphraseMinLength p)
-            $ BA.convert bytes
-            ]
-      where p = Proxy :: Proxy "user"
-
-instance Arbitrary (Passphrase "encryption") where
-    arbitrary = preparePassphrase EncryptWithPBKDF2
-        <$> arbitrary @(Passphrase "user")
-
-instance Arbitrary (Quantity "byte" Word16) where
-    arbitrary = Quantity <$> choose (128, 2_048)
-    shrink (Quantity size)
-        | size <= 1 = []
-        | otherwise = Quantity <$> shrink size
-
-dummyAddress :: Word8 -> Address
-dummyAddress b =
-    Address $ BS.pack $ 1 : replicate 56 b
-
---------------------------------------------------------------------------------
--- Transaction constraints
---------------------------------------------------------------------------------
-
-data MockSelection = MockSelection
-    { txInputCount :: Int
-    , txOutputs :: [TxOut]
-    , txRewardWithdrawal :: Coin
-    }
-    deriving (Eq, Show)
-
-genMockSelection :: Gen MockSelection
-genMockSelection = do
-    txInputCount <-
-        oneof [ pure 0, choose (1, 1_000) ]
-    txOutputCount <-
-        oneof [ pure 0, choose (1, 1_000) ]
-    txOutputs <- replicateM txOutputCount genOut
-    txRewardWithdrawal <-
-        Coin <$> oneof [ pure 0, chooseNatural (1, 1_000_000) ]
-    pure MockSelection
-        { txInputCount
-        , txOutputs
-        , txRewardWithdrawal
-        }
-  where
-    genOut = TxOut (dummyAddress dummyByte) <$> genTokenBundleSmallRange
-      where
-        dummyByte :: Word8
-        dummyByte = fromIntegral $ fromEnum 'A'
-
-shrinkMockSelection :: MockSelection -> [MockSelection]
-shrinkMockSelection mock =
-    [ MockSelection i o r
-    | (i, o, r) <- shrink (txInputCount, txOutputs, txRewardWithdrawal)
-    ]
-  where
-    MockSelection
-        { txInputCount
-        , txOutputs
-        , txRewardWithdrawal
-        } = mock
-
-instance Arbitrary MockSelection where
-    arbitrary = genMockSelection
-    shrink = shrinkMockSelection
-
-newtype Large a = Large { unLarge :: a }
-    deriving (Eq, Show)
-
-instance Arbitrary (Large TokenBundle) where
-    arbitrary = fmap Large . genTxOutTokenBundle =<< choose (1, 128)
-
-instance Arbitrary AssetId where
-    arbitrary =
-        TokenBundle.AssetId
-        <$> arbitrary
-        -- In the calculation of the size of the Tx, the minting of assets
-        -- increases the size of the Tx by both a constant factor per asset
-        -- plus a variable factor (the size of the asset name). In a typical
-        -- setting, the constant factor dominantes (it's about 40 bytes per
-        -- asset, whereas the size of an asset name has a maximum of 32 bytes).
-        -- So we create a generator here that forces the variable factor to
-        -- dominate so we can test the sanity of the estimation algorithm.
-        <*> (UnsafeTokenName . BS.pack <$> vector 128)
-
-instance Arbitrary TokenPolicyId where
-    arbitrary = genTokenPolicyId
-    shrink = shrinkTokenPolicyId
-
-instance Arbitrary (Script KeyHash) where
-    arbitrary = do
-        keyHashes <- vectorOf 10 arbitrary
-        genScript keyHashes
-
-instance Arbitrary KeyHash where
-    arbitrary = do
-        cred <- oneof [pure Payment, pure Delegation]
-        KeyHash cred . BS.pack <$> vectorOf 28 arbitrary
-
-instance Arbitrary StdGenSeed  where
-  arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
-
--- | Encapsulates both a 'ChangeAddressGen s' and the 's' required for the
--- generator. This allows properties like 'prop_balanceTransactionValid' to
--- easily generate arbitrary change address generators.
-data AnyChangeAddressGenWithState where
-    AnyChangeAddressGenWithState
-        :: forall s. ChangeAddressGen s
-        -> s
-        -> AnyChangeAddressGenWithState
-
--- Byron style addresses, corresponding to the change addresses generated by
--- "byron wallets".
-dummyByronChangeAddressGen :: AnyChangeAddressGenWithState
-dummyByronChangeAddressGen = AnyChangeAddressGenWithState
-    (defaultChangeAddressGen @(RndState 'Mainnet) (byronRootK, pwd))
-    (mkRndState byronRootK 0)
-  where
-    byronRootK = Byron.generateKeyFromSeed mw mempty
-    mw = SomeMnemonic $ either (error . show) id
-        (entropyToMnemonic @12 <$> mkEntropy "0000000000000000")
-    pwd = mempty
-
--- | Shelley base addresses, corresponding to the change addresses generated by
--- normal shelley wallets.
-dummyShelleyChangeAddressGen :: AnyChangeAddressGenWithState
-dummyShelleyChangeAddressGen = AnyChangeAddressGenWithState
-    (defaultChangeAddressGen @(SeqState 'Mainnet ShelleyKey)
-        (delegationAddress @ShelleyKey SMainnet)
-        )
-    (mkSeqStateFromRootXPrv ShelleyKeyS
-        (RootCredentials rootK pwd)
-        purposeCIP1852
-        defaultAddressPoolGap)
-
-  where
-    pwd = Passphrase ""
-    rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) mempty
-
-instance Show AnyChangeAddressGenWithState where
-    show (AnyChangeAddressGenWithState (ChangeAddressGen gen _) s) =
-            show $ fst $ gen s
 
 balanceTransactionSpec :: Spec
 balanceTransactionSpec = describe "balanceTransaction" $ do
@@ -958,6 +650,314 @@ balanceTransactionSpec = describe "balanceTransaction" $ do
 
     dummyAddr = Address $ unsafeFromHex
         "60b1e5e0fb74c86c801f646841e07cdb42df8b82ef3ce4e57cb5412e77"
+
+instance Arbitrary SealedTx where
+    arbitrary = sealedTxFromCardano <$> genTx
+
+instance Arbitrary (ShelleyKey 'RootK XPrv) where
+    shrink _ = []
+    arbitrary = genRootKeysSeqWithPass =<< genPassphrase (0, 16)
+
+genRootKeysSeqWithPass
+    :: Passphrase "encryption"
+    -> Gen (ShelleyKey depth XPrv)
+genRootKeysSeqWithPass encryptionPass = do
+    s <- SomeMnemonic <$> genMnemonic @15
+    g <- Just . SomeMnemonic <$> genMnemonic @12
+    return $ Shelley.unsafeGenerateKeyFromSeed (s, g) encryptionPass
+
+genPassphrase :: (Int, Int) -> Gen (Passphrase purpose)
+genPassphrase range = do
+    n <- choose range
+    InfiniteList bytes _ <- arbitrary
+    return $ Passphrase $ BA.convert $ BS.pack $ take n bytes
+
+instance Arbitrary a => Arbitrary (NonEmpty a) where
+    arbitrary = genNonEmpty arbitrary
+    shrink = shrinkNonEmpty shrink
+
+allEras :: [(Int, AnyCardanoEra)]
+allEras =
+    [ (1, AnyCardanoEra ByronEra)
+    , (2, AnyCardanoEra ShelleyEra)
+    , (3, AnyCardanoEra AllegraEra)
+    , (4, AnyCardanoEra MaryEra)
+    , (5, AnyCardanoEra AlonzoEra)
+    , (6, AnyCardanoEra BabbageEra)
+    , (7, AnyCardanoEra ConwayEra)
+    ]
+
+eraNum :: AnyCardanoEra -> Int
+eraNum e = fst $ head $ filter ((== e) . snd) allEras
+
+instance Arbitrary AnyCardanoEra where
+    arbitrary = frequency $ zip [1..] $ map (pure . snd) allEras
+    -- Shrink by choosing a *later* era
+    shrink e = map snd $ filter ((> eraNum e) . fst) allEras
+
+instance Arbitrary AnyRecentEra where
+    arbitrary = elements
+        [ AnyRecentEra RecentEraBabbage
+        , AnyRecentEra RecentEraConway
+        ]
+
+testTxLayer :: TransactionLayer ShelleyKey 'CredFromKeyK SealedTx
+testTxLayer = newTransactionLayer ShelleyKeyS Cardano.Mainnet
+
+newtype ForByron a = ForByron { getForByron :: a } deriving (Show, Eq)
+
+data DecodeSetup = DecodeSetup
+    { inputs :: UTxO
+    , outputs :: [TxOut] -- TODO: add datums
+    , metadata :: Maybe TxMetadata
+    , ttl :: SlotNo
+    , keyPasswd :: [(XPrv, Passphrase "encryption")]
+    , network :: Cardano.NetworkId
+    } deriving Show
+
+instance Arbitrary DecodeSetup where
+    arbitrary = do
+        utxo <- arbitrary
+        DecodeSetup utxo
+            <$> listOf1 arbitrary
+            <*> arbitrary
+            <*> arbitrary
+            <*> vectorOf (Map.size $ unUTxO utxo) arbitrary
+            <*> arbitrary
+
+    shrink (DecodeSetup i o m t k n) =
+        [ DecodeSetup i' o' m' t' k' n'
+        | (i',o',m',t',k',n') <- shrink (i,o,m,t,k,n) ]
+
+instance Arbitrary (ForByron DecodeSetup) where
+    arbitrary = do
+        test <- arbitrary
+        pure $ ForByron (test { metadata = Nothing })
+
+instance Arbitrary Cardano.NetworkId where
+    arbitrary = oneof
+        [ pure Cardano.Mainnet
+        , Cardano.Testnet . Cardano.NetworkMagic <$> arbitrary
+        ]
+
+instance Arbitrary SlotNo where
+    arbitrary = SlotNo <$> choose (1, 1_000)
+
+instance Arbitrary TxIn where
+    arbitrary = do
+        ix <- scale (`mod` 3) arbitrary
+        txId <- arbitrary
+        pure $ TxIn txId ix
+
+instance Arbitrary (Hash "Tx") where
+    arbitrary = do
+        bs <- vectorOf 32 arbitrary
+        pure $ Hash $ BS.pack bs
+
+-- Coins (quantities of lovelace) must be strictly positive when included in
+-- transactions.
+--
+instance Arbitrary Coin where
+    arbitrary = genCoinPositive
+    shrink = shrinkCoinPositive
+
+instance Arbitrary TxOut where
+    arbitrary =
+        TxOut addr <$> scale (`mod` 4) genTokenBundleSmallRange
+      where
+        addr = Address $ BS.pack (1:replicate 56 0)
+    shrink (TxOut addr bundle) =
+        [ TxOut addr bundle'
+        | bundle' <- shrinkTokenBundleSmallRange bundle
+        ]
+
+instance Arbitrary TokenBundle where
+    arbitrary = genTokenBundleSmallRange
+    shrink = shrinkTokenBundleSmallRange
+
+instance Arbitrary TxMetadata where
+    arbitrary = TxMetadata <$> arbitrary
+    shrink (TxMetadata md) = TxMetadata <$> shrink md
+
+instance Arbitrary TxMetadataValue where
+    -- Note: test generation at the integration level is very simple. More
+    -- detailed metadata tests are done at unit level.
+    arbitrary = TxMetaNumber <$> arbitrary
+
+instance Arbitrary UTxO where
+    arbitrary = do
+        n <- choose (1,10)
+        inps <- vectorOf n arbitrary
+        let addr = Address $ BS.pack (1:replicate 56 0)
+        coins <- vectorOf n arbitrary
+        let outs = map (TxOut addr) coins
+        pure $ UTxO $ Map.fromList $ zip inps outs
+
+instance Arbitrary XPrv where
+    arbitrary = fromJust . xprvFromBytes . BS.pack <$> vectorOf 96 arbitrary
+
+-- Necessary unsound Show instance for QuickCheck failure reporting
+instance Show XPrv where
+    show = show . xprvToBytes
+
+-- Necessary unsound Eq instance for QuickCheck properties
+instance Eq XPrv where
+    (==) = (==) `on` xprvToBytes
+
+instance Arbitrary (Passphrase "user") where
+    arbitrary = do
+        n <- choose (passphraseMinLength p, passphraseMaxLength p)
+        bytes <- T.encodeUtf8 . T.pack <$> replicateM n arbitraryPrintableChar
+        return $ Passphrase $ BA.convert bytes
+      where p = Proxy :: Proxy "user"
+
+    shrink (Passphrase bytes)
+        | BA.length bytes <= passphraseMinLength p = []
+        | otherwise =
+            [ Passphrase
+            $ BA.convert
+            $ B8.take (passphraseMinLength p)
+            $ BA.convert bytes
+            ]
+      where p = Proxy :: Proxy "user"
+
+instance Arbitrary (Passphrase "encryption") where
+    arbitrary = preparePassphrase EncryptWithPBKDF2
+        <$> arbitrary @(Passphrase "user")
+
+instance Arbitrary (Quantity "byte" Word16) where
+    arbitrary = Quantity <$> choose (128, 2_048)
+    shrink (Quantity size)
+        | size <= 1 = []
+        | otherwise = Quantity <$> shrink size
+
+dummyAddress :: Word8 -> Address
+dummyAddress b =
+    Address $ BS.pack $ 1 : replicate 56 b
+
+--------------------------------------------------------------------------------
+-- Transaction constraints
+--------------------------------------------------------------------------------
+
+data MockSelection = MockSelection
+    { txInputCount :: Int
+    , txOutputs :: [TxOut]
+    , txRewardWithdrawal :: Coin
+    }
+    deriving (Eq, Show)
+
+genMockSelection :: Gen MockSelection
+genMockSelection = do
+    txInputCount <-
+        oneof [ pure 0, choose (1, 1_000) ]
+    txOutputCount <-
+        oneof [ pure 0, choose (1, 1_000) ]
+    txOutputs <- replicateM txOutputCount genOut
+    txRewardWithdrawal <-
+        Coin <$> oneof [ pure 0, chooseNatural (1, 1_000_000) ]
+    pure MockSelection
+        { txInputCount
+        , txOutputs
+        , txRewardWithdrawal
+        }
+  where
+    genOut = TxOut (dummyAddress dummyByte) <$> genTokenBundleSmallRange
+      where
+        dummyByte :: Word8
+        dummyByte = fromIntegral $ fromEnum 'A'
+
+shrinkMockSelection :: MockSelection -> [MockSelection]
+shrinkMockSelection mock =
+    [ MockSelection i o r
+    | (i, o, r) <- shrink (txInputCount, txOutputs, txRewardWithdrawal)
+    ]
+  where
+    MockSelection
+        { txInputCount
+        , txOutputs
+        , txRewardWithdrawal
+        } = mock
+
+instance Arbitrary MockSelection where
+    arbitrary = genMockSelection
+    shrink = shrinkMockSelection
+
+newtype Large a = Large { unLarge :: a }
+    deriving (Eq, Show)
+
+instance Arbitrary (Large TokenBundle) where
+    arbitrary = fmap Large . genTxOutTokenBundle =<< choose (1, 128)
+
+instance Arbitrary AssetId where
+    arbitrary =
+        TokenBundle.AssetId
+        <$> arbitrary
+        -- In the calculation of the size of the Tx, the minting of assets
+        -- increases the size of the Tx by both a constant factor per asset
+        -- plus a variable factor (the size of the asset name). In a typical
+        -- setting, the constant factor dominantes (it's about 40 bytes per
+        -- asset, whereas the size of an asset name has a maximum of 32 bytes).
+        -- So we create a generator here that forces the variable factor to
+        -- dominate so we can test the sanity of the estimation algorithm.
+        <*> (UnsafeTokenName . BS.pack <$> vector 128)
+
+instance Arbitrary TokenPolicyId where
+    arbitrary = genTokenPolicyId
+    shrink = shrinkTokenPolicyId
+
+instance Arbitrary (Script KeyHash) where
+    arbitrary = do
+        keyHashes <- vectorOf 10 arbitrary
+        genScript keyHashes
+
+instance Arbitrary KeyHash where
+    arbitrary = do
+        cred <- oneof [pure Payment, pure Delegation]
+        KeyHash cred . BS.pack <$> vectorOf 28 arbitrary
+
+instance Arbitrary StdGenSeed  where
+  arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
+
+-- | Encapsulates both a 'ChangeAddressGen s' and the 's' required for the
+-- generator. This allows properties like 'prop_balanceTransactionValid' to
+-- easily generate arbitrary change address generators.
+data AnyChangeAddressGenWithState where
+    AnyChangeAddressGenWithState
+        :: forall s. ChangeAddressGen s
+        -> s
+        -> AnyChangeAddressGenWithState
+
+-- Byron style addresses, corresponding to the change addresses generated by
+-- "byron wallets".
+dummyByronChangeAddressGen :: AnyChangeAddressGenWithState
+dummyByronChangeAddressGen = AnyChangeAddressGenWithState
+    (defaultChangeAddressGen @(RndState 'Mainnet) (byronRootK, pwd))
+    (mkRndState byronRootK 0)
+  where
+    byronRootK = Byron.generateKeyFromSeed mw mempty
+    mw = SomeMnemonic $ either (error . show) id
+        (entropyToMnemonic @12 <$> mkEntropy "0000000000000000")
+    pwd = mempty
+
+-- | Shelley base addresses, corresponding to the change addresses generated by
+-- normal shelley wallets.
+dummyShelleyChangeAddressGen :: AnyChangeAddressGenWithState
+dummyShelleyChangeAddressGen = AnyChangeAddressGenWithState
+    (defaultChangeAddressGen @(SeqState 'Mainnet ShelleyKey)
+        (delegationAddress @ShelleyKey SMainnet)
+        )
+    (mkSeqStateFromRootXPrv ShelleyKeyS
+        (RootCredentials rootK pwd)
+        purposeCIP1852
+        defaultAddressPoolGap)
+
+  where
+    pwd = Passphrase ""
+    rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) mempty
+
+instance Show AnyChangeAddressGenWithState where
+    show (AnyChangeAddressGenWithState (ChangeAddressGen gen _) s) =
+            show $ fst $ gen s
 
 --------------------------------------------------------------------------------
 -- Properties for 'distributeSurplus'
