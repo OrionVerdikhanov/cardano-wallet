@@ -36,7 +36,7 @@ module Cardano.Write.Tx.BalanceSpec (spec) where
 import Prelude
 
 import Cardano.Address.Derivation
-    ( XPrv, XPub, toXPub, xprvFromBytes, xprvToBytes, xpubPublicKey )
+    ( XPrv, XPub, xprvFromBytes, xprvToBytes, xpubPublicKey )
 import Cardano.Address.Script
     ( KeyHash (..), KeyRole (Delegation, Payment, Policy), Script (..) )
 import Cardano.Api
@@ -542,11 +542,6 @@ whenSupportedInEra test era f =
         Just supported ->
             f supported
 
-mkCredentials
-    :: (XPrv, Passphrase "encryption")
-    -> ClearCredentials ShelleyKey
-mkCredentials (pk, hpwd) = RootCredentials (liftRawKey ShelleyKeyS pk) hpwd
-
 instance Arbitrary (ShelleyKey 'RootK XPrv) where
     shrink _ = []
     arbitrary = genRootKeysSeqWithPass =<< genPassphrase (0, 16)
@@ -568,68 +563,6 @@ genPassphrase range = do
 instance Arbitrary a => Arbitrary (NonEmpty a) where
     arbitrary = genNonEmpty arbitrary
     shrink = shrinkNonEmpty shrink
-
-keyToAddress :: (XPrv, Passphrase "encryption") -> Address
-keyToAddress (xprv, _pwd) =
-    -- TODO, decrypt?
-    paymentAddress @ShelleyKey @'CredFromKeyK SMainnet
-        . publicKey ShelleyKeyS
-        . liftRawKey ShelleyKeyS
-        $ xprv
-
-utxoFromKeys
-    :: [(XPrv, Passphrase "encryption")]
-    -> (UTxO -> Property)
-    -> Property
-utxoFromKeys keys utxoProp =
-    let
-        addresses :: [Address]
-        addresses = keyToAddress <$> keys
-
-        txOuts :: [TxOut]
-        txOuts = (flip foldMap) addresses $ \addr ->
-            [TxOut addr mempty]
-
-        isUnique :: [TxIn] -> Bool
-        isUnique txIns = nub txIns == txIns
-    in
-        forAll (vectorOf (length txOuts) genTxIn `suchThat` isUnique) $
-            \txIns -> do
-                let utxo = UTxO $ Map.fromList $ zip txIns txOuts
-                utxoProp utxo
-
-lookupFnFromKeys
-    :: [(XPrv, Passphrase "encryption")]
-    ->  ( Address ->
-            Maybe (ShelleyKey 'CredFromKeyK XPrv, Passphrase "encryption")
-        )
-lookupFnFromKeys keys addr =
-    let
-        addrMap
-            :: Map Address
-                (ShelleyKey 'CredFromKeyK XPrv, Passphrase "encryption")
-        addrMap = Map.fromList
-            $ zip (keyToAddress <$> keys)
-                (first (liftRawKey ShelleyKeyS) <$> keys)
-    in
-        Map.lookup addr addrMap
-
-withBodyContent
-    :: IsCardanoEra era
-    => CardanoEra era
-    ->  ( Cardano.TxBodyContent Cardano.BuildTx era ->
-          Cardano.TxBodyContent Cardano.BuildTx era
-        )
-    -> ((Cardano.TxBody era, [Cardano.KeyWitness era]) -> Property)
-    -> Property
-withBodyContent era modTxBody cont =
-    forAllShow (genTxBodyContent era) showTransactionBody $
-        \txBodyContent -> do
-            let
-                txBodyContent' = modTxBody txBodyContent
-                txBody = unsafeMakeTransactionBody txBodyContent'
-
-            forAll (genWitnesses era txBody) $ \wits -> cont (txBody, wits)
 
 allEras :: [(Int, AnyCardanoEra)]
 allEras =
@@ -2391,71 +2324,6 @@ block0 = Block
     , delegations = []
     }
 
-updateTxSpec :: Spec
-updateTxSpec = describe "updateTx" $ do
-    describe "no existing key witnesses" $ do
-        txs <- readTestTransactions
-        forM_ txs $ \(filepath, sealedTx) -> do
-            let anyRecentEraTx
-                    = fromJust $ Write.asAnyRecentEra $ cardanoTx sealedTx
-            it ("without TxUpdate: " <> filepath) $ do
-                Write.withInAnyRecentEra anyRecentEraTx $ \tx ->
-                    case updateTx tx noTxUpdate of
-                        Left e ->
-                            expectationFailure $
-                            "expected update to succeed but failed: "
-                                <> show e
-                        Right tx' -> do
-                            if tx /= tx' && show tx == show tx'
-                            -- The transaction encoding has changed.
-                            -- Unfortunately transactions are compared using
-                            -- their memoized bytes, but shown without their
-                            -- memoized bytes. This leads to the very
-                            -- confusing situation where the show result of
-                            -- two transactions is identical, but the (==)
-                            -- result of two transactions shows a
-                            -- discrepancy.
-                            --
-                            -- In this case we expect failure and write out
-                            -- the new memoized bytes to a file so the
-                            -- developer can update the binary test data.
-                            then do
-                                let
-                                    newEncoding = convertToBase Base16 $
-                                        Cardano.serialiseToCBOR tx'
-                                    rejectFilePath
-                                        = $(getTestData)
-                                        </> "plutus"
-                                        </> filepath <> ".rej"
-                                BS.writeFile rejectFilePath newEncoding
-                                expectationFailure $ mconcat
-                                    [ "Transaction encoding has changed, "
-                                    , "making comparison impossible. "
-                                    , "See .rej file: "
-                                    , rejectFilePath
-                                    ]
-                            else
-                                Cardano.serialiseToCBOR tx
-                                  `shouldBe` Cardano.serialiseToCBOR tx'
-
-            prop ("with TxUpdate: " <> filepath) $
-                prop_updateTx anyRecentEraTx
-
-    describe "existing key witnesses" $ do
-
-        signedTxs <- runIO signedTxTestData
-
-        it "returns `Left err` with noTxUpdate" $ do
-            -- Could be argued that it should instead return `Right tx`.
-            let anyRecentEraTx = recentEraTxFromBytes
-                    $ snd $ head signedTxs
-            Write.withInAnyRecentEra anyRecentEraTx $ \tx ->
-                updateTx tx noTxUpdate
-                    `shouldBe` Left (ErrExistingKeyWitnesses 1)
-
-        it "returns `Left err` when extra body content is non-empty" $ do
-            pendingWith "todo: add test data"
-
 unsafeSealedTxFromHex :: ByteString -> IO SealedTx
 unsafeSealedTxFromHex =
     either (fail . show) pure
@@ -2489,138 +2357,6 @@ prop_updateTx
     inputs = sealedInputs . sealedTxFromCardano'
     outputs = sealedOutputs . sealedTxFromCardano'
     collateralIns = sealedCollateralInputs . sealedTxFromCardano'
-
-estimateSignedTxSizeSpec :: Spec
-estimateSignedTxSizeSpec = describe "estimateSignedTxSize" $ do
-    txBinaries <- runIO signedTxTestData
-    describe "equals the binary size of signed txs" $
-        forAllGoldens txBinaries test
-  where
-    test
-        :: forall era. Write.IsRecentEra era
-        => String
-        -> ByteString
-        -> Cardano.Tx era
-        -> IO ()
-    test _name bs cTx@(Cardano.Tx body _) = do
-        let pparams = Write.pparamsLedger $ mockPParamsForBalancing @era
-            witCount dummyAddr = estimateKeyWitnessCount
-                (Write.fromCardanoUTxO
-                    $ utxoPromisingInputsHaveAddress dummyAddr body)
-                body
-            era = recentEra @era
-
-            tx :: Write.Tx (Write.ShelleyLedgerEra era)
-            tx = Write.fromCardanoTx @era cTx
-
-            noScripts = Write.withConstraints (recentEra @era) $
-                Map.null $ tx ^. witsTxL . scriptTxWitsL
-            noBootWits = Write.withConstraints (recentEra @era) $
-                Set.null $ tx ^. witsTxL . bootAddrTxWitsL
-            testDoesNotYetSupport x =
-                pendingWith $ "Test setup does not work for txs with " <> x
-
-            signedBinarySize = TxSize $ fromIntegral $ BS.length bs
-
-        case (noScripts, noBootWits) of
-                (True, True) -> do
-                    estimateSignedTxSize era pparams (witCount vkCredAddr) tx
-                        `shouldBeInclusivelyWithin`
-                        ( signedBinarySize - correction
-                        , signedBinarySize
-                        )
-                (False, False) ->
-                    testDoesNotYetSupport "bootstrap wits + scripts"
-                (True, False) ->
-                    estimateSignedTxSize era pparams (witCount bootAddr) tx
-                        `shouldBeInclusivelyWithin`
-                        ( signedBinarySize - correction
-                        , signedBinarySize + bootWitsCanBeLongerBy
-                        )
-                (False, True) -> testDoesNotYetSupport "scripts"
-      where
-        -- Apparently the cbor encoding used by the ledger for size checks
-        -- (`toCBORForSizeComputation`) is a few bytes smaller than the actual
-        -- serialized size for these goldens.
-        correction = TxSize 6
-
-    -- | Checks for membership in the given closed interval [a, b]
-    x `shouldBeInclusivelyWithin` (a, b) =
-        if a <= x && x <= b
-        then pure ()
-        else expectationFailure $ unwords
-            [ show x
-            , "not in the expected interval"
-            , "[" <> show a <> ", " <> show b <> "]"
-            ]
-
-    forAllGoldens
-        :: [(String, ByteString)]
-        -> (forall era. Write.IsRecentEra era
-                => String
-                -> ByteString
-                -> Cardano.Tx era
-                -> IO ())
-        -> Spec
-    forAllGoldens goldens f = forM_ goldens $ \(name, bs) -> it name $
-        Write.withInAnyRecentEra (recentEraTxFromBytes bs) $ \tx ->
-            let
-                msg = unlines
-                    [ B8.unpack $ hex bs
-                    , pretty
-                        $ sealedTxFromCardano
-                        $ InAnyCardanoEra cardanoEra tx
-                    ]
-            in
-                Hspec.counterexample msg $ f name bs tx
-
-    -- estimateSignedTxSize now depends upon being able to resolve inputs. To
-    -- keep tese tests working, we can create a UTxO with dummy values as long
-    -- as estimateSignedTxSize can tell that all inputs in the tx correspond to
-    -- outputs with vk payment credentials.
-    utxoPromisingInputsHaveAddress
-        :: forall era. (HasCallStack, Cardano.IsShelleyBasedEra era)
-        => Address
-        -> Cardano.TxBody era
-        -> Cardano.UTxO era
-    utxoPromisingInputsHaveAddress addr (Cardano.TxBody body) =
-        Cardano.UTxO $ Map.fromList $
-            [ (i
-               , Compatibility.toCardanoTxOut
-                     (shelleyBasedEra @era)
-                     Nothing
-                     (TxOut addr mempty)
-               )
-            | i <- allTxIns body
-            ]
-
-      where
-        allTxIns b = col ++ map fst ins
-          where
-            col = case Cardano.txInsCollateral b of
-                Cardano.TxInsCollateral _ c -> c
-                Cardano.TxInsCollateralNone -> []
-            ins = Cardano.txIns body
-
-    -- An address with a vk payment credential. For the test above, this is the
-    -- only aspect which matters.
-    vkCredAddr = Address $ unsafeFromHex
-        "6000000000000000000000000000000000000000000000000000000000"
-
-    -- This is a short bootstrap address retrieved from
-    -- "byron-address-format.md".
-    bootAddr = Address $ unsafeFromHex
-        "82d818582183581cba970ad36654d8dd8f74274b733452ddeab9a62a397746be3c42ccdda0001a9026da5b"
-
-    -- With more attributes, the address can be longer. This value was chosen
-    -- /experimentally/ to make the tests pass. The ledger has been validating
-    -- new outputs with bootstrap addresses have attributes not larger than 64
-    -- bytes. The ledger has done so since the middle of the Byron era.
-    -- Address attributes are included in the bootstrap witnesses.
-    --
-    -- NOTE: If we had access to the real UTxO set for the inputs of the test
-    -- txs, we wouldn't need this fuzziness. Related: ADP-2987.
-    bootWitsCanBeLongerBy = TxSize 45
 
 fst6 :: (a, b, c, d, e, f) -> a
 fst6 (a,_,_,_,_,_) = a
@@ -2780,19 +2516,6 @@ signedTxTestData = do
     goldenIx :: FilePath -> Maybe Int
     goldenIx = readMaybe . takeWhile isDigit
 
-readTestTransactions :: SpecM a [(FilePath, SealedTx)]
-readTestTransactions = runIO $ do
-    let dir = $(getTestData) </> "plutus"
-    paths <- listDirectory dir
-    files <- flip foldMap paths $ \f ->
-        -- Ignore reject files
-        if ".rej" `isSuffixOf` takeExtension f
-        then pure []
-        else do
-            contents <- BS.readFile (dir </> f)
-            pure [(f, contents)]
-    traverse (\(f,bs) -> (f,) <$> unsafeSealedTxFromHex bs) files
-
 dummyTimeTranslation :: TimeTranslation
 dummyTimeTranslation =
     timeTranslationFromEpochInfo
@@ -2836,21 +2559,6 @@ newtype ShowOrd a = ShowOrd { unShowOrd :: a }
 
 instance (Eq a, Show a) => Ord (ShowOrd a) where
     compare = comparing show
-
-recentEraTxFromBytes :: ByteString -> Write.InAnyRecentEra Cardano.Tx
-recentEraTxFromBytes bytes =
-    let
-        anyEraTx
-            = cardanoTx
-            $ either (error . show) id
-            $ sealedTxFromBytes bytes
-    in
-        case Write.asAnyRecentEra anyEraTx of
-            Just recentEraTx -> recentEraTx
-            Nothing -> error "recentEraTxFromBytes: older eras not supported"
-
-cardanoTx :: SealedTx -> InAnyCardanoEra Cardano.Tx
-cardanoTx = cardanoTxIdeallyNoLaterThan maxBound
 
 dummyPolicyK :: KeyHash
 dummyPolicyK = KeyHash Policy (BS.replicate 32 0)
