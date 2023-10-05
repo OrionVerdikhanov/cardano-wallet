@@ -651,24 +651,6 @@ instance Arbitrary Cardano.NetworkId where
         , Cardano.Testnet . Cardano.NetworkMagic <$> arbitrary
         ]
 
-instance Arbitrary TxIn where
-    arbitrary = do
-        ix <- scale (`mod` 3) arbitrary
-        txId <- arbitrary
-        pure $ TxIn txId ix
-
-instance Arbitrary (Hash "Tx") where
-    arbitrary = do
-        bs <- vectorOf 32 arbitrary
-        pure $ Hash $ BS.pack bs
-
--- Coins (quantities of lovelace) must be strictly positive when included in
--- transactions.
---
-instance Arbitrary Coin where
-    arbitrary = genCoinPositive
-    shrink = shrinkCoinPositive
-
 instance Arbitrary TokenBundle where
     arbitrary = genTokenBundleSmallRange
     shrink = shrinkTokenBundleSmallRange
