@@ -651,13 +651,6 @@ balanceTransactionSpec = describe "balanceTransaction" $ do
     dummyAddr = Address $ unsafeFromHex
         "60b1e5e0fb74c86c801f646841e07cdb42df8b82ef3ce4e57cb5412e77"
 
-instance Arbitrary SealedTx where
-    arbitrary = sealedTxFromCardano <$> genTx
-
-instance Arbitrary (ShelleyKey 'RootK XPrv) where
-    shrink _ = []
-    arbitrary = genRootKeysSeqWithPass =<< genPassphrase (0, 16)
-
 genRootKeysSeqWithPass
     :: Passphrase "encryption"
     -> Gen (ShelleyKey depth XPrv)
@@ -672,10 +665,6 @@ genPassphrase range = do
     InfiniteList bytes _ <- arbitrary
     return $ Passphrase $ BA.convert $ BS.pack $ take n bytes
 
-instance Arbitrary a => Arbitrary (NonEmpty a) where
-    arbitrary = genNonEmpty arbitrary
-    shrink = shrinkNonEmpty shrink
-
 allEras :: [(Int, AnyCardanoEra)]
 allEras =
     [ (1, AnyCardanoEra ByronEra)
@@ -689,11 +678,6 @@ allEras =
 
 eraNum :: AnyCardanoEra -> Int
 eraNum e = fst $ head $ filter ((== e) . snd) allEras
-
-instance Arbitrary AnyCardanoEra where
-    arbitrary = frequency $ zip [1..] $ map (pure . snd) allEras
-    -- Shrink by choosing a *later* era
-    shrink e = map snd $ filter ((> eraNum e) . fst) allEras
 
 instance Arbitrary AnyRecentEra where
     arbitrary = elements
