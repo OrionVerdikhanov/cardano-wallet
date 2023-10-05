@@ -42,29 +42,22 @@ import Cardano.Address.Script
 import Cardano.Api
     ( AnyCardanoEra (..)
     , CardanoEra (..)
-
     , InAnyCardanoEra (..)
     , IsCardanoEra (..)
-
-
     )
 import Cardano.Api.Gen
     ( genAddressByron
     , genAddressInEra
-
     , genNetworkId
     , genPaymentCredential
     , genSignedValue
     , genStakeAddressReference
     , genTx
-
     , genTxForBalancing
-
     , genTxOut
     , genTxOutDatum
     , genTxOutValue
     , genValueForTxOut
-
     )
 import Cardano.Api.Shelley
     ( fromShelleyLovelace )
@@ -79,13 +72,10 @@ import Cardano.Ledger.Api
     , MaryEraTxBody (..)
     , ShelleyEraTxBody (..)
     , ValidityInterval (..)
-
     , ppCoinsPerUTxOByteL
     , ppMaxTxSizeL
     , ppMinFeeAL
-
     , serialiseAddr
-
     )
 import Cardano.Ledger.Era
     ( Era )
@@ -100,16 +90,13 @@ import Cardano.Numeric.Util
 import Cardano.Pool.Types
     ( PoolId (..) )
 import Cardano.Wallet
-    ( defaultChangeAddressGen
-
-    )
+    ( defaultChangeAddressGen )
 import Cardano.Wallet.Address.Derivation
     ( DelegationAddress (delegationAddress)
     , Depth (..)
     , DerivationType (..)
     , Index
     , Role (..)
-
     , hex
     , paymentAddress
     )
@@ -168,10 +155,6 @@ import Cardano.Wallet.Primitive.Types.Tx
     ( SealedTx (..)
     , TxMetadata (..)
     , TxMetadataValue (..)
-
-
-
-
     , sealedTxFromCardano
     , sealedTxFromCardano'
     , serialisedTx
@@ -189,11 +172,7 @@ import Cardano.Wallet.Primitive.Types.Tx.TxOut.Gen
 import Cardano.Wallet.Primitive.Types.UTxO
     ( UTxO (..) )
 import Cardano.Wallet.Shelley.Compatibility
-    ( fromCardanoValue
-
-    , toCardanoTxIn
-    , toCardanoValue
-    )
+    ( fromCardanoValue, toCardanoTxIn, toCardanoValue )
 import Cardano.Wallet.Shelley.Compatibility.Ledger
     ( toBabbageTxOut
     , toLedgerAddress
@@ -203,30 +182,13 @@ import Cardano.Wallet.Shelley.Compatibility.Ledger
     , toWalletCoin
     )
 import Cardano.Wallet.Shelley.Transaction
-    ( mkByronWitness
-    , mkDelegationCertificates
-
-
-    , newTransactionLayer
-
-    )
+    ( mkByronWitness, mkDelegationCertificates, newTransactionLayer )
 import Cardano.Wallet.Transaction
-    ( DelegationAction (..)
-
-    , TransactionLayer (..)
-    , WitnessCountCtx (..)
-
-    )
+    ( DelegationAction (..), TransactionLayer (..), WitnessCountCtx (..) )
 import Cardano.Wallet.Unsafe
     ( unsafeFromHex )
 import Cardano.Write.Tx
-    ( AnyRecentEra (..)
-    , FeePerByte (..)
-    , RecentEra (..)
-
-    , recentEra
-
-    )
+    ( AnyRecentEra (..), FeePerByte (..), RecentEra (..), recentEra )
 import Cardano.Write.Tx.Balance
     ( ChangeAddressGen (..)
     , ErrAssignRedeemers (..)
@@ -234,33 +196,20 @@ import Cardano.Write.Tx.Balance
     , ErrBalanceTxInternalError (..)
     , ErrBalanceTxOutputError (..)
     , ErrBalanceTxOutputErrorInfo (..)
-
-
     , ErrUpdateSealedTx (..)
     , PartialTx (..)
     , Redeemer (..)
     , TxFeeAndChange (..)
-
-
     , UTxOAssumptions (..)
     , balanceTransaction
     , constructUTxOIndex
-
-
-
     , fromWalletUTxO
-
-
     , posAndNegFromCardanoValue
-
-
     )
 import Cardano.Write.Tx.Sign
     ( KeyWitnessCount (..), estimateKeyWitnessCount, estimateSignedTxSize )
 import Cardano.Write.Tx.SizeEstimation
-    ( sizeOf_BootstrapWitnesses
-
-    )
+    ( sizeOf_BootstrapWitnesses )
 import Cardano.Write.Tx.TimeTranslation
     ( TimeTranslation, timeTranslationFromEpochInfo )
 import Control.Lens
@@ -308,15 +257,7 @@ import Data.Time.Clock.POSIX
 import Data.Word
     ( Word16, Word8 )
 import Fmt
-    ( Buildable (..)
-    , blockListF
-    , blockListF'
-    , fmt
-    , nameF
-    , pretty
-
-
-    )
+    ( Buildable (..), blockListF, blockListF', fmt, nameF, pretty )
 import Numeric.Natural
     ( Natural )
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types
@@ -332,34 +273,22 @@ import System.FilePath
 import System.Random.StdGenSeed
     ( StdGenSeed (..), stdGenFromSeed )
 import Test.Hspec
-    ( Spec
-    , describe
-    , expectationFailure
-    , it
-
-
-    , shouldBe
-
-    )
+    ( Spec, describe, expectationFailure, it, shouldBe )
 import Test.Hspec.Golden
     ( Golden (..) )
 import Test.QuickCheck
     ( Arbitrary (..)
     , InfiniteList (..)
     , Property
-
     , arbitraryBoundedEnum
     , arbitraryPrintableChar
     , arbitrarySizedNatural
-
     , choose
     , classify
     , conjoin
     , counterexample
-
     , elements
     , forAll
-
     , frequency
     , label
     , liftShrink2
@@ -370,23 +299,15 @@ import Test.QuickCheck
     , shrinkBoundedEnum
     , shrinkList
     , shrinkMapBy
-
     , tabulate
     , vector
     , vectorOf
     , withMaxSuccess
-
     , (===)
     , (==>)
     )
 import Test.QuickCheck.Extra
-    ( chooseNatural
-    , genNonEmpty
-
-    , shrinkNatural
-    , shrinkNonEmpty
-    , (.>=.)
-    )
+    ( chooseNatural, genNonEmpty, shrinkNatural, shrinkNonEmpty, (.>=.) )
 import Test.QuickCheck.Gen
     ( Gen (..), listOf1 )
 import Test.QuickCheck.Random
