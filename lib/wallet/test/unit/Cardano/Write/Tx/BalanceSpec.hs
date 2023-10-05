@@ -631,10 +631,6 @@ instance Arbitrary (Quantity "byte" Word16) where
         | size <= 1 = []
         | otherwise = Quantity <$> shrink size
 
---------------------------------------------------------------------------------
--- Transaction constraints
---------------------------------------------------------------------------------
-
 instance Arbitrary StdGenSeed  where
   arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
 
@@ -674,9 +670,6 @@ dummyShelleyChangeAddressGen = AnyChangeAddressGenWithState
   where
     pwd = Passphrase ""
     rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) mempty
-
-newtype TxBalanceSurplus a = TxBalanceSurplus {unTxBalanceSurplus :: a}
-    deriving (Eq, Show)
 
 data Wallet' = Wallet' UTxOAssumptions UTxO AnyChangeAddressGenWithState
     deriving Show via (ShowBuildable Wallet')
