@@ -705,9 +705,6 @@ instance Arbitrary Cardano.NetworkId where
         , Cardano.Testnet . Cardano.NetworkMagic <$> arbitrary
         ]
 
-instance Arbitrary SlotNo where
-    arbitrary = SlotNo <$> choose (1, 1_000)
-
 instance Arbitrary TxIn where
     arbitrary = do
         ix <- scale (`mod` 3) arbitrary
@@ -726,16 +723,6 @@ instance Arbitrary Coin where
     arbitrary = genCoinPositive
     shrink = shrinkCoinPositive
 
-instance Arbitrary TxOut where
-    arbitrary =
-        TxOut addr <$> scale (`mod` 4) genTokenBundleSmallRange
-      where
-        addr = Address $ BS.pack (1:replicate 56 0)
-    shrink (TxOut addr bundle) =
-        [ TxOut addr bundle'
-        | bundle' <- shrinkTokenBundleSmallRange bundle
-        ]
-
 instance Arbitrary TokenBundle where
     arbitrary = genTokenBundleSmallRange
     shrink = shrinkTokenBundleSmallRange
@@ -748,15 +735,6 @@ instance Arbitrary TxMetadataValue where
     -- Note: test generation at the integration level is very simple. More
     -- detailed metadata tests are done at unit level.
     arbitrary = TxMetaNumber <$> arbitrary
-
-instance Arbitrary UTxO where
-    arbitrary = do
-        n <- choose (1,10)
-        inps <- vectorOf n arbitrary
-        let addr = Address $ BS.pack (1:replicate 56 0)
-        coins <- vectorOf n arbitrary
-        let outs = map (TxOut addr) coins
-        pure $ UTxO $ Map.fromList $ zip inps outs
 
 instance Arbitrary XPrv where
     arbitrary = fromJust . xprvFromBytes . BS.pack <$> vectorOf 96 arbitrary
@@ -811,74 +789,11 @@ data MockSelection = MockSelection
     }
     deriving (Eq, Show)
 
-genMockSelection :: Gen MockSelection
-genMockSelection = do
-    txInputCount <-
-        oneof [ pure 0, choose (1, 1_000) ]
-    txOutputCount <-
-        oneof [ pure 0, choose (1, 1_000) ]
-    txOutputs <- replicateM txOutputCount genOut
-    txRewardWithdrawal <-
-        Coin <$> oneof [ pure 0, chooseNatural (1, 1_000_000) ]
-    pure MockSelection
-        { txInputCount
-        , txOutputs
-        , txRewardWithdrawal
-        }
-  where
-    genOut = TxOut (dummyAddress dummyByte) <$> genTokenBundleSmallRange
-      where
-        dummyByte :: Word8
-        dummyByte = fromIntegral $ fromEnum 'A'
-
-shrinkMockSelection :: MockSelection -> [MockSelection]
-shrinkMockSelection mock =
-    [ MockSelection i o r
-    | (i, o, r) <- shrink (txInputCount, txOutputs, txRewardWithdrawal)
-    ]
-  where
-    MockSelection
-        { txInputCount
-        , txOutputs
-        , txRewardWithdrawal
-        } = mock
-
-instance Arbitrary MockSelection where
-    arbitrary = genMockSelection
-    shrink = shrinkMockSelection
-
 newtype Large a = Large { unLarge :: a }
     deriving (Eq, Show)
 
 instance Arbitrary (Large TokenBundle) where
     arbitrary = fmap Large . genTxOutTokenBundle =<< choose (1, 128)
-
-instance Arbitrary AssetId where
-    arbitrary =
-        TokenBundle.AssetId
-        <$> arbitrary
-        -- In the calculation of the size of the Tx, the minting of assets
-        -- increases the size of the Tx by both a constant factor per asset
-        -- plus a variable factor (the size of the asset name). In a typical
-        -- setting, the constant factor dominantes (it's about 40 bytes per
-        -- asset, whereas the size of an asset name has a maximum of 32 bytes).
-        -- So we create a generator here that forces the variable factor to
-        -- dominate so we can test the sanity of the estimation algorithm.
-        <*> (UnsafeTokenName . BS.pack <$> vector 128)
-
-instance Arbitrary TokenPolicyId where
-    arbitrary = genTokenPolicyId
-    shrink = shrinkTokenPolicyId
-
-instance Arbitrary (Script KeyHash) where
-    arbitrary = do
-        keyHashes <- vectorOf 10 arbitrary
-        genScript keyHashes
-
-instance Arbitrary KeyHash where
-    arbitrary = do
-        cred <- oneof [pure Payment, pure Delegation]
-        KeyHash cred . BS.pack <$> vectorOf 28 arbitrary
 
 instance Arbitrary StdGenSeed  where
   arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
