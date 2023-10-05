@@ -792,9 +792,6 @@ data MockSelection = MockSelection
 newtype Large a = Large { unLarge :: a }
     deriving (Eq, Show)
 
-instance Arbitrary (Large TokenBundle) where
-    arbitrary = fmap Large . genTxOutTokenBundle =<< choose (1, 128)
-
 instance Arbitrary StdGenSeed  where
   arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
 
