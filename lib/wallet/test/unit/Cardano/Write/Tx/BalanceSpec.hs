@@ -28,8 +28,6 @@ module Cardano.Write.Tx.BalanceSpec (spec) where
 
 import Prelude
 
-import Cardano.Address.Derivation
-    ( XPrv, xprvFromBytes, xprvToBytes )
 import Cardano.Address.Script
     ( KeyHash (..), KeyRole (Policy) )
 import Cardano.Api
@@ -107,12 +105,7 @@ import Cardano.Wallet.Primitive.NetworkId
     , withSNetworkId
     )
 import Cardano.Wallet.Primitive.Passphrase
-    ( Passphrase (..)
-    , PassphraseMaxLength (..)
-    , PassphraseMinLength (..)
-    , PassphraseScheme (..)
-    , preparePassphrase
-    )
+    ( Passphrase (..) )
 import Cardano.Wallet.Primitive.Slotting
     ( PastHorizonException )
 import Cardano.Wallet.Primitive.Types
@@ -121,8 +114,6 @@ import Cardano.Wallet.Primitive.Types.Address
     ( Address (..) )
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..) )
-import Cardano.Wallet.Primitive.Types.Coin.Gen
-    ( genCoinPositive, shrinkCoinPositive )
 import Cardano.Wallet.Primitive.Types.Credentials
     ( RootCredentials (..) )
 import Cardano.Wallet.Primitive.Types.Hash
@@ -132,13 +123,7 @@ import Cardano.Wallet.Primitive.Types.TokenBundle
 import Cardano.Wallet.Primitive.Types.TokenBundle.Gen
     ( genTokenBundleSmallRange, shrinkTokenBundleSmallRange )
 import Cardano.Wallet.Primitive.Types.Tx
-    ( SealedTx (..)
-    , TxMetadata (..)
-    , TxMetadataValue (..)
-    , sealedTxFromCardano
-    , sealedTxFromCardano'
-    , serialisedTx
-    )
+    ( SealedTx (..), sealedTxFromCardano, sealedTxFromCardano', serialisedTx )
 import Cardano.Wallet.Primitive.Types.Tx.Constraints
     ( TxSize (..) )
 import Cardano.Wallet.Primitive.Types.Tx.TxIn
@@ -204,7 +189,7 @@ import Data.ByteString
 import Data.Default
     ( Default (..) )
 import Data.Function
-    ( on, (&) )
+    ( (&) )
 import Data.Functor.Identity
     ( Identity )
 import Data.Generics.Internal.VL.Lens
@@ -215,8 +200,6 @@ import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Maybe
     ( fromJust, fromMaybe )
-import Data.Proxy
-    ( Proxy (..) )
 import Data.Quantity
     ( Quantity (..) )
 import Data.Ratio
@@ -255,7 +238,6 @@ import Test.QuickCheck
     ( Arbitrary (..)
     , Property
     , arbitraryBoundedEnum
-    , arbitraryPrintableChar
     , choose
     , classify
     , conjoin
@@ -271,7 +253,6 @@ import Test.QuickCheck
     , shrinkList
     , shrinkMapBy
     , tabulate
-    , vectorOf
     , withMaxSuccess
     , (===)
     , (==>)
@@ -306,7 +287,6 @@ import qualified Cardano.Wallet.Primitive.Types.TokenBundle as TokenBundle
 import qualified Cardano.Wallet.Shelley.Compatibility as Compatibility
 import qualified Cardano.Write.ProtocolParameters as Write
 import qualified Cardano.Write.Tx as Write
-import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Foldable as F
@@ -315,7 +295,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import qualified Ouroboros.Consensus.HardFork.History as HF
 
