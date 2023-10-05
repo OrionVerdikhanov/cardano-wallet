@@ -172,7 +172,7 @@ import Cardano.Write.Tx.Balance
     , updateTx
     )
 import Cardano.Write.Tx.BalanceSpec
-    ( mockPParamsForBalancing )
+    ( dummyPolicyK, mockPParamsForBalancing, testTxLayer )
 import Cardano.Write.Tx.Sign
     ( estimateKeyWitnessCount, estimateSignedTxSize )
 import Cardano.Write.Tx.SizeEstimation
@@ -1318,9 +1318,6 @@ compareOnCBOR b sealed = case cardanoTx sealed of
 
 --------------------------------------------------------------------------------
 
-testTxLayer :: TransactionLayer ShelleyKey 'CredFromKeyK SealedTx
-testTxLayer = newTransactionLayer ShelleyKeyS Cardano.Mainnet
-
 newtype ForByron a = ForByron { getForByron :: a } deriving (Show, Eq)
 
 data DecodeSetup = DecodeSetup
@@ -2372,6 +2369,3 @@ recentEraTxFromBytes bytes =
 
 cardanoTx :: SealedTx -> InAnyCardanoEra Cardano.Tx
 cardanoTx = cardanoTxIdeallyNoLaterThan maxBound
-
-dummyPolicyK :: KeyHash
-dummyPolicyK = KeyHash Policy (BS.replicate 32 0)
