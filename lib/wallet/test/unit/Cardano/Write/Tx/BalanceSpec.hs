@@ -746,10 +746,6 @@ instance Arbitrary (Quantity "byte" Word16) where
         | size <= 1 = []
         | otherwise = Quantity <$> shrink size
 
-dummyAddress :: Word8 -> Address
-dummyAddress b =
-    Address $ BS.pack $ 1 : replicate 56 b
-
 --------------------------------------------------------------------------------
 -- Transaction constraints
 --------------------------------------------------------------------------------
@@ -804,21 +800,8 @@ dummyShelleyChangeAddressGen = AnyChangeAddressGenWithState
     pwd = Passphrase ""
     rootK = Shelley.unsafeGenerateKeyFromSeed (dummyMnemonic, Nothing) mempty
 
---------------------------------------------------------------------------------
--- Properties for 'distributeSurplus'
---------------------------------------------------------------------------------
-
-mainnetFeePerByte :: FeePerByte
-mainnetFeePerByte = FeePerByte 44
-
 newtype TxBalanceSurplus a = TxBalanceSurplus {unTxBalanceSurplus :: a}
     deriving (Eq, Show)
-
---------------------------------------------------------------------------------
-
--- https://mail.haskell.org/pipermail/haskell-cafe/2016-August/124742.html
-mkGen :: (QCGen -> a) -> Gen a
-mkGen f = MkGen $ \g _ -> f g
 
 data Wallet' = Wallet' UTxOAssumptions UTxO AnyChangeAddressGenWithState
     deriving Show via (ShowBuildable Wallet')
