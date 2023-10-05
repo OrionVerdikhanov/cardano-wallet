@@ -636,15 +636,6 @@ testTxLayer = newTransactionLayer ShelleyKeyS Cardano.Mainnet
 
 newtype ForByron a = ForByron { getForByron :: a } deriving (Show, Eq)
 
-data DecodeSetup = DecodeSetup
-    { inputs :: UTxO
-    , outputs :: [TxOut] -- TODO: add datums
-    , metadata :: Maybe TxMetadata
-    , ttl :: SlotNo
-    , keyPasswd :: [(XPrv, Passphrase "encryption")]
-    , network :: Cardano.NetworkId
-    } deriving Show
-
 instance Arbitrary Cardano.NetworkId where
     arbitrary = oneof
         [ pure Cardano.Mainnet
@@ -654,26 +645,6 @@ instance Arbitrary Cardano.NetworkId where
 instance Arbitrary TokenBundle where
     arbitrary = genTokenBundleSmallRange
     shrink = shrinkTokenBundleSmallRange
-
-instance Arbitrary TxMetadata where
-    arbitrary = TxMetadata <$> arbitrary
-    shrink (TxMetadata md) = TxMetadata <$> shrink md
-
-instance Arbitrary TxMetadataValue where
-    -- Note: test generation at the integration level is very simple. More
-    -- detailed metadata tests are done at unit level.
-    arbitrary = TxMetaNumber <$> arbitrary
-
-instance Arbitrary XPrv where
-    arbitrary = fromJust . xprvFromBytes . BS.pack <$> vectorOf 96 arbitrary
-
--- Necessary unsound Show instance for QuickCheck failure reporting
-instance Show XPrv where
-    show = show . xprvToBytes
-
--- Necessary unsound Eq instance for QuickCheck properties
-instance Eq XPrv where
-    (==) = (==) `on` xprvToBytes
 
 instance Arbitrary (Passphrase "user") where
     arbitrary = do
