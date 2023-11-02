@@ -227,16 +227,18 @@ import qualified Data.Set as Set
 -- always in its canonical form: we can perform an equality check without
 -- needing any extra canonicalization steps.
 --
-newtype TokenMap = TokenMap
+newtype TokenMapF policyId assetName quantity = TokenMap
     { unTokenMap
-        :: MonoidMap TokenPolicyId (MonoidMap TokenName TokenQuantity)
+        :: MonoidMap policyId (MonoidMap assetName quantity)
     }
     deriving stock (Eq, Generic)
-    deriving (Read, Show) via (Quiet TokenMap)
+    deriving (Read, Show) via Quiet (TokenMapF policyId assetName quantity)
     deriving newtype (Commutative, Semigroup, Monoid, MonoidNull)
     deriving newtype (LeftReductive, RightReductive, Reductive)
     deriving newtype (LeftGCDMonoid, RightGCDMonoid, GCDMonoid)
     deriving newtype (OverlappingGCDMonoid, Monus)
+
+type TokenMap = TokenMapF TokenPolicyId TokenName TokenQuantity
 
 instance NFData TokenMap
 instance Hashable TokenMap where
