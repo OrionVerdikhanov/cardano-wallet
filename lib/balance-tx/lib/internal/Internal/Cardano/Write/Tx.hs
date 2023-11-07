@@ -322,6 +322,8 @@ instance TestEquality RecentEra where
 
 class
     ( CardanoApi.IsShelleyBasedEra era
+    , Core.Era (CardanoApi.ShelleyLedgerEra era)
+    , Ledger.Crypto (Core.EraCrypto (CardanoApi.ShelleyLedgerEra era))
     , Eq (TxOut (CardanoApi.ShelleyLedgerEra era))
     , Show (TxOut (CardanoApi.ShelleyLedgerEra era))
     , Typeable era
