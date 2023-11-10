@@ -16,6 +16,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 {- HLINT ignore "Use null" -}
 {- HLINT ignore "Use camelCase" -}
 
@@ -911,7 +912,7 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
         ]
 
     delegate :: PartialTx CardanoApi.BabbageEra
-    delegate = PartialTx (CardanoApi.Tx body []) mempty []
+    delegate = PartialTx (fromCardanoApiTx (CardanoApi.Tx body [])) mempty []
       where
         body = CardanoApi.ShelleyTxBody
             CardanoApi.ShelleyBasedEraBabbage
@@ -2034,7 +2035,11 @@ addExtraTxIns
     -> PartialTx CardanoApi.BabbageEra
     -> PartialTx CardanoApi.BabbageEra
 addExtraTxIns extraIns =
-    #tx %~ modifyBabbageTxBody (inputsTxBodyL %~ (<> toLedgerInputs extraIns))
+    #tx %~ modifyBabbageTxBody
+        ( fromCardanoApiTx @CardanoApi.BabbageEra
+        . inputsTxBodyL %~ (<> toLedgerInputs extraIns)
+        . toCardanoApiTx @CardanoApi.BabbageEra
+        )
   where
     toLedgerInputs =
         Set.map Convert.toLedger . Set.fromList
@@ -2102,24 +2107,27 @@ deserializeBabbageTx = either (error . show) id
 fst6 :: (a, b, c, d, e, f) -> a
 fst6 (a, _, _, _, _, _) = a
 
-hasInsCollateral :: CardanoApi.Tx era -> Bool
-hasInsCollateral (CardanoApi.Tx (CardanoApi.TxBody content) _) =
-    case CardanoApi.txInsCollateral content of
-        CardanoApi.TxInsCollateralNone -> False
-        CardanoApi.TxInsCollateral _ [] -> False
-        CardanoApi.TxInsCollateral _ _ -> True
+hasInsCollateral :: forall era. Tx (ShelleyLedgerEra era) -> Bool
+hasInsCollateral
+    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
+        case CardanoApi.txInsCollateral content of
+            CardanoApi.TxInsCollateralNone -> False
+            CardanoApi.TxInsCollateral _ [] -> False
+            CardanoApi.TxInsCollateral _ _ -> True
 
-hasReturnCollateral :: CardanoApi.Tx era -> Bool
-hasReturnCollateral (CardanoApi.Tx (CardanoApi.TxBody content) _) =
-    case CardanoApi.txReturnCollateral content of
-        CardanoApi.TxReturnCollateralNone -> False
-        CardanoApi.TxReturnCollateral _ _ -> True
+hasReturnCollateral :: forall era. Tx (ShelleyLedgerEra era) -> Bool
+hasReturnCollateral
+    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
+        case CardanoApi.txReturnCollateral content of
+            CardanoApi.TxReturnCollateralNone -> False
+            CardanoApi.TxReturnCollateral _ _ -> True
 
-hasTotalCollateral :: CardanoApi.Tx era -> Bool
-hasTotalCollateral (CardanoApi.Tx (CardanoApi.TxBody content) _) =
-    case CardanoApi.txTotalCollateral content of
-        CardanoApi.TxTotalCollateralNone -> False
-        CardanoApi.TxTotalCollateral _ _ -> True
+hasTotalCollateral :: forall era. Tx (ShelleyLedgerEra era) -> Bool
+hasTotalCollateral
+    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
+        case CardanoApi.txTotalCollateral content of
+            CardanoApi.TxTotalCollateralNone -> False
+            CardanoApi.TxTotalCollateral _ _ -> True
 
 mkTestWallet :: W.UTxO -> Wallet'
 mkTestWallet utxo =
@@ -2162,7 +2170,8 @@ modifyBabbageTxBody
         keyWits
 
 paymentPartialTx :: [W.TxOut] -> PartialTx CardanoApi.BabbageEra
-paymentPartialTx txouts = PartialTx (CardanoApi.Tx body []) mempty []
+paymentPartialTx txouts =
+    PartialTx (fromCardanoApiTx (CardanoApi.Tx body [])) mempty []
   where
     body = CardanoApi.ShelleyTxBody
         CardanoApi.ShelleyBasedEraBabbage
@@ -2199,7 +2208,7 @@ restrictResolution
 restrictResolution (PartialTx tx inputs redeemers) =
     let
         CardanoApi.UTxO u = toCardanoApiUTxO @era inputs
-        u' = u `Map.restrictKeys` (inputsInTx tx)
+        u' = u `Map.restrictKeys` inputsInTx (toCardanoApiTx @era tx)
         inputs' = fromCardanoApiUTxO @era (CardanoApi.UTxO u')
     in
         PartialTx tx inputs' redeemers
@@ -2285,7 +2294,11 @@ withValidityInterval
     :: ValidityInterval
     -> PartialTx CardanoApi.BabbageEra
     -> PartialTx CardanoApi.BabbageEra
-withValidityInterval vi = #tx %~ modifyBabbageTxBody (vldtTxBodyL .~ vi)
+withValidityInterval vi = #tx %~
+    ( fromCardanoApiTx
+    . modifyBabbageTxBody (vldtTxBodyL .~ vi)
+    , toCardanoApiTx
+    )
 
 walletToCardanoValue :: W.TokenBundle -> CardanoApi.Value
 walletToCardanoValue = CardanoApi.fromMaryValue . Convert.toLedger
