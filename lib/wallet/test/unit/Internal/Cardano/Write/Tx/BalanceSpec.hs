@@ -2696,7 +2696,7 @@ instance Arbitrary (PartialTx CardanoApi.BabbageEra) where
         return $ PartialTx tx (fromCardanoApiUTxO inputUTxO) redeemers
     shrink (PartialTx tx inputUTxO redeemers) =
         [ PartialTx tx inputUTxO' redeemers
-        | inputUTxO' <- shrinkInputResolution @CardanoApi.BabbageEra inputUTxO
+        | inputUTxO' <- shrinkInputResolution inputUTxO
         ] <>
         [ restrictResolution $ PartialTx tx' inputUTxO redeemers
         | tx' <- shrinkTxBabbage tx
