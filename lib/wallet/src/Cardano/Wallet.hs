@@ -589,6 +589,7 @@ import Cardano.Wallet.Transaction.Built
 import Cardano.Write.Tx
     ( ErrBalanceTx (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
+    , UTxOAssumptions (..)
     , balanceTransaction
     )
 import Control.Arrow
@@ -765,7 +766,6 @@ import Internal.Cardano.Write.Tx
 import Internal.Cardano.Write.Tx.Balance
     ( ChangeAddressGen (..)
     , PartialTx (..)
-    , UTxOAssumptions (..)
     )
 import Internal.Cardano.Write.Tx.SizeEstimation
     ( TxWitnessTag (..)

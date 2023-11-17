@@ -21,7 +21,7 @@ module Cardano.Write.Tx
 
     -- * UTxO-related types and functions
     , UTxO
-    , UTxOAssumptions
+    , UTxOAssumptions (..)
     , UTxOIndex
     , constructUTxOIndex
     ) where
@@ -42,7 +42,7 @@ import Internal.Cardano.Write.Tx.Balance
     , ErrBalanceTxOutputTokenQuantityExceedsLimitError (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
     , ErrUpdateSealedTx (..)
-    , UTxOAssumptions
+    , UTxOAssumptions (..)
     , UTxOIndex
     , balanceTransaction
     , constructUTxOIndex

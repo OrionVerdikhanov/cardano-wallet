@@ -661,6 +661,9 @@ import Cardano.Wallet.Transaction
 import Cardano.Wallet.Unsafe
     ( unsafeRunExceptT
     )
+import Cardano.Write.Tx
+    ( UTxOAssumptions (..)
+    )
 import Control.Arrow
     ( second
     , (&&&)
@@ -807,7 +810,6 @@ import Internal.Cardano.Write.Tx
     )
 import Internal.Cardano.Write.Tx.Balance
     ( Redeemer (..)
-    , UTxOAssumptions (..)
     )
 import Network.Ntp
     ( NtpClient
