@@ -19,6 +19,9 @@ module Cardano.Write.Tx
     , ErrBalanceTxUnableToCreateChangeError (..)
     , ErrUpdateSealedTx (..)
 
+    -- * Partial transactions
+    , PartialTx (..)
+
     -- * UTxO-related types and functions
     , UTxO
     , UTxOAssumptions (..)
@@ -42,6 +45,7 @@ import Internal.Cardano.Write.Tx.Balance
     , ErrBalanceTxOutputTokenQuantityExceedsLimitError (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
     , ErrUpdateSealedTx (..)
+    , PartialTx (..)
     , UTxOAssumptions (..)
     , UTxOIndex
     , balanceTransaction
