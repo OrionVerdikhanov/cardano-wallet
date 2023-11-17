@@ -19,6 +19,9 @@ module Cardano.Write.Tx
     , ErrBalanceTxUnableToCreateChangeError (..)
     , ErrUpdateSealedTx (..)
 
+    -- * Change address generation
+    , ChangeAddressGen (..)
+
     -- * Partial transactions
     , PartialTx (..)
 
@@ -33,7 +36,8 @@ import Internal.Cardano.Write.Tx
     ( UTxO
     )
 import Internal.Cardano.Write.Tx.Balance
-    ( ErrAssignRedeemers (..)
+    ( ChangeAddressGen (..)
+    , ErrAssignRedeemers (..)
     , ErrBalanceTx (..)
     , ErrBalanceTxAssetsInsufficientError (..)
     , ErrBalanceTxInsufficientCollateralError (..)
