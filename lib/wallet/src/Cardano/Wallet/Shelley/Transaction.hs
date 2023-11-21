@@ -185,6 +185,9 @@ import Cardano.Wallet.Transaction
 import Cardano.Wallet.Util
     ( HasCallStack
     )
+import Cardano.Write.Tx
+    ( RecentEra (..)
+    )
 import Control.Arrow
     ( left
     , second
@@ -227,9 +230,6 @@ import Data.Word
     )
 import Internal.Cardano.Write.ProtocolParameters
     ( ProtocolParameters (..)
-    )
-import Internal.Cardano.Write.Tx
-    ( RecentEra (..)
     )
 import Internal.Cardano.Write.Tx.SizeEstimation
     ( TxSkeleton (..)
