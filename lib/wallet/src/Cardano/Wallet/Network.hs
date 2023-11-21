@@ -80,6 +80,9 @@ import Cardano.Wallet.Primitive.Types.RewardAccount
 import Cardano.Wallet.Primitive.Types.Tx.SealedTx
     ( SealedTx
     )
+import Cardano.Write.Tx
+    ( MaybeInRecentEra
+    )
 import Control.Concurrent.Class.MonadSTM
     ( atomically
     )
@@ -122,9 +125,6 @@ import Fmt
     )
 import GHC.Generics
     ( Generic
-    )
-import Internal.Cardano.Write.Tx
-    ( MaybeInRecentEra
     )
 import NoThunks.Class
     ( AllowThunksIn (..)

@@ -119,6 +119,9 @@ import Cardano.Wallet.Shelley.Compatibility
     , toShelleyCoin
     , unsealShelleyTx
     )
+import Cardano.Write.Tx
+    ( MaybeInRecentEra (..)
+    )
 import Control.Applicative
     ( liftA3
     )
@@ -248,9 +251,6 @@ import Fmt
     )
 import GHC.Stack
     ( HasCallStack
-    )
-import Internal.Cardano.Write.Tx
-    ( MaybeInRecentEra (..)
     )
 import Network.Mux
     ( MuxError (..)
