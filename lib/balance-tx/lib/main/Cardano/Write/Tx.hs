@@ -10,6 +10,7 @@ module Cardano.Write.Tx
     , MaybeInRecentEra (..)
     , RecentEra (..)
     , cardanoEraFromRecentEra
+    , toAnyCardanoEra
     , toRecentEraGADT
 
     -- * Balancing transactions
@@ -47,6 +48,7 @@ import Internal.Cardano.Write.Tx
     , RecentEra (..)
     , UTxO
     , cardanoEraFromRecentEra
+    , toAnyCardanoEra
     , toRecentEraGADT
     )
 import Internal.Cardano.Write.Tx.Balance
