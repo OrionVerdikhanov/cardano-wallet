@@ -762,8 +762,7 @@ import GHC.TypeNats
     ( Nat
     )
 import Internal.Cardano.Write.Tx
-    ( recentEra
-    , toRecentEraGADT
+    ( toRecentEraGADT
     )
 import Internal.Cardano.Write.Tx.SizeEstimation
     ( TxWitnessTag (..)
