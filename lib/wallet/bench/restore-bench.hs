@@ -233,6 +233,9 @@ import Cardano.Wallet.Unsafe
     , unsafeMkPercentage
     , unsafeRunExceptT
     )
+import Cardano.Write.Tx
+    ( AnyRecentEra (..)
+    )
 import Control.Arrow
     ( first
     )
@@ -318,9 +321,6 @@ import GHC.TypeLits
     ( KnownNat
     , Nat
     , natVal
-    )
-import Internal.Cardano.Write.Tx
-    ( AnyRecentEra (..)
     )
 import Numeric
     ( fromRat

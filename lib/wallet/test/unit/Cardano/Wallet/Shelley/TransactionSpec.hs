@@ -187,7 +187,8 @@ import Cardano.Wallet.Unsafe
     ( unsafeFromHex
     )
 import Cardano.Write.Tx
-    ( ErrBalanceTx (..)
+    ( AnyRecentEra (..)
+    , ErrBalanceTx (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
     )
 import Control.Arrow
@@ -262,8 +263,7 @@ import Fmt
     , (||+)
     )
 import Internal.Cardano.Write.Tx
-    ( AnyRecentEra (..)
-    , RecentEra (..)
+    ( RecentEra (..)
     , cardanoEraFromRecentEra
     )
 import Internal.Cardano.Write.Tx.SizeEstimation

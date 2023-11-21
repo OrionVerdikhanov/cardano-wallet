@@ -662,7 +662,8 @@ import Cardano.Wallet.Unsafe
     ( unsafeRunExceptT
     )
 import Cardano.Write.Tx
-    ( UTxOAssumptions (..)
+    ( AnyRecentEra (..)
+    , UTxOAssumptions (..)
     )
 import Control.Arrow
     ( second
@@ -804,9 +805,6 @@ import GHC.Generics
     )
 import GHC.Stack
     ( HasCallStack
-    )
-import Internal.Cardano.Write.Tx
-    ( AnyRecentEra (..)
     )
 import Internal.Cardano.Write.Tx.Balance
     ( Redeemer (..)
