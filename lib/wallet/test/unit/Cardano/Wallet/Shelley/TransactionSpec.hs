@@ -191,6 +191,7 @@ import Cardano.Write.Tx
     , ErrBalanceTx (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
     , RecentEra (..)
+    , cardanoEraFromRecentEra
     )
 import Control.Arrow
     ( first
@@ -262,9 +263,6 @@ import Fmt
     , pretty
     , (+||)
     , (||+)
-    )
-import Internal.Cardano.Write.Tx
-    ( cardanoEraFromRecentEra
     )
 import Internal.Cardano.Write.Tx.SizeEstimation
     ( TxSkeleton (..)
