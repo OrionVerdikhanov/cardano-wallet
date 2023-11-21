@@ -255,6 +255,7 @@ import qualified Cardano.Ledger.Keys.Bootstrap as SL
 import qualified Cardano.Wallet.Primitive.Types.TokenMap as TokenMap
 import qualified Cardano.Wallet.Shelley.Compatibility as Compatibility
 import qualified Cardano.Wallet.Shelley.Compatibility.Ledger as Convert
+import qualified Cardano.Write.Tx as Write
 import qualified Data.ByteString as BS
 import qualified Data.Foldable as F
 import qualified Data.List as L

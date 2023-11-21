@@ -4,8 +4,11 @@
 --
 module Cardano.Write.Tx
     (
+    -- * Eras
+      IsRecentEra (..)
+
     -- * Balancing transactions
-      balanceTransaction
+    , balanceTransaction
     , ErrAssignRedeemers (..)
     , ErrBalanceTx (..)
     , ErrBalanceTxAssetsInsufficientError (..)
@@ -33,7 +36,8 @@ module Cardano.Write.Tx
     ) where
 
 import Internal.Cardano.Write.Tx
-    ( UTxO
+    ( IsRecentEra (..)
+    , UTxO
     )
 import Internal.Cardano.Write.Tx.Balance
     ( ChangeAddressGen (..)
