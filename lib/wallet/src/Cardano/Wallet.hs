@@ -590,6 +590,7 @@ import Cardano.Write.Tx
     ( ChangeAddressGen (..)
     , ErrBalanceTx (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
+    , IsRecentEra (..)
     , PartialTx (..)
     , UTxOAssumptions (..)
     , balanceTransaction
