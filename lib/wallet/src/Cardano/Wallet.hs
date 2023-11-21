@@ -594,6 +594,7 @@ import Cardano.Write.Tx
     , PartialTx (..)
     , UTxOAssumptions (..)
     , balanceTransaction
+    , toRecentEraGADT
     )
 import Control.Arrow
     ( (>>>)
@@ -761,9 +762,6 @@ import GHC.Stack
     )
 import GHC.TypeNats
     ( Nat
-    )
-import Internal.Cardano.Write.Tx
-    ( toRecentEraGADT
     )
 import Internal.Cardano.Write.Tx.SizeEstimation
     ( TxWitnessTag (..)
