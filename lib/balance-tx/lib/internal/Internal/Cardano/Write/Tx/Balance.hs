@@ -493,13 +493,12 @@ data UTxOIndex era = UTxOIndex
     }
 
 constructUTxOIndex
-    :: forall era. IsRecentEra era
-    => UTxO era
+    :: RecentEra era
+    -> UTxO era
     -> UTxOIndex era
-constructUTxOIndex ledgerUTxO =
+constructUTxOIndex era ledgerUTxO =
     UTxOIndex {walletUTxO, walletUTxOIndex, ledgerUTxO}
   where
-    era = recentEra @era
     walletUTxO = toWalletUTxO era ledgerUTxO
     walletUTxOIndex = UTxOIndex.fromMap $ toInternalUTxOMap walletUTxO
 

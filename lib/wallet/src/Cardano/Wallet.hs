@@ -2348,7 +2348,7 @@ buildTransactionPure
                 txCtx
                 (Left preSelection)
     let utxoIndex =
-            Write.constructUTxOIndex @era $
+            Write.constructUTxOIndex (Write.recentEra @era) $
             Write.fromWalletUTxO (Write.recentEra @era) utxo
     withExceptT Left $
         first Write.toCardanoApiTx <$>
@@ -2987,7 +2987,7 @@ transactionFee DBLayer{atomically, walletState} protocolParams
             -- strict, and each field is defined in terms of 'Data.Map.Strict'.
             --
             evaluate
-                $ Write.constructUTxOIndex @era
+                $ Write.constructUTxOIndex (Write.recentEra @era)
                 $ Write.fromWalletUTxO (Write.recentEra @era)
                 $ availableUTxO mempty wallet
         unsignedTxBody <- wrapErrMkTransaction $
