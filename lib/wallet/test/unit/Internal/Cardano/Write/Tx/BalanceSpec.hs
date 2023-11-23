@@ -2063,6 +2063,7 @@ balanceTx
     = (`evalRand` stdGenFromSeed seed) $ runExceptT $ do
         (transactionInEra, _nextChangeState) <-
             balanceTransaction
+                (recentEra @era)
                 utxoAssumptions
                 protocolParameters
                 timeTranslation
@@ -2088,6 +2089,7 @@ balanceTransactionWithDummyChangeState utxoAssumptions utxo seed partialTx =
     (`evalRand` stdGenFromSeed seed) $ runExceptT $
         first Write.toCardanoApiTx <$>
         balanceTransaction
+            (recentEra @era)
             utxoAssumptions
             mockPParamsForBalancing
             dummyTimeTranslation

@@ -520,11 +520,9 @@ toWalletUTxO era (UTxO m) = withConstraints era $ W.UTxO
     $ Map.map (toWalletTxOut era) m
 
 balanceTransaction
-    :: forall era m changeState.
-        ( MonadRandom m
-        , IsRecentEra era
-        )
-    => UTxOAssumptions
+    :: forall era m changeState. MonadRandom m
+    => RecentEra era
+    -> UTxOAssumptions
     -> PParams era
     -- Protocol parameters. Can be retrieved via Local State Query to a
     -- local node.
@@ -548,7 +546,7 @@ balanceTransaction
     -> changeState
     -> PartialTx era
     -> ExceptT (ErrBalanceTx era) m (Tx era, changeState)
-balanceTransaction
+balanceTransaction era
     utxoAssumptions
     pp
     timeTranslation
@@ -556,10 +554,10 @@ balanceTransaction
     genChange
     s
     partialTx
-    = do
+    = withConstraints era $ do
     let adjustedPartialTx = flip (over #tx) partialTx $
             assignMinimalAdaQuantitiesToOutputsWithoutAda
-                (recentEra @era)
+                era
                 pp
         balanceWith strategy =
             balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
