@@ -1037,7 +1037,7 @@ selectAssets era pp utxoAssumptions outs redeemers
 
     selectionConstraints = SelectionConstraints
         { tokenBundleSizeAssessor =
-            withConstraints era $ mkTokenBundleSizeAssessor pp
+            mkTokenBundleSizeAssessor era pp
         , computeMinimumAdaQuantity = \addr tokens -> Convert.toWallet $
             computeMinimumCoinForTxOut
                 era

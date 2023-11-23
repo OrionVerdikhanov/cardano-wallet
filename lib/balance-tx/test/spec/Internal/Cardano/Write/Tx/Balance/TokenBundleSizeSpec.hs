@@ -302,8 +302,8 @@ instance Arbitrary PParamsInRecentEra where
                 ]
 
 babbageTokenBundleSizeAssessor :: TokenBundleSizeAssessor
-babbageTokenBundleSizeAssessor = mkTokenBundleSizeAssessor
-    $ (def :: PParams StandardBabbage)
+babbageTokenBundleSizeAssessor = mkTokenBundleSizeAssessor RecentEraBabbage $
+    def
         & ppProtocolVersionL .~ (ProtVer (eraProtVerLow @StandardBabbage) 0)
         & ppMaxValSizeL .~ maryTokenBundleMaxSizeBytes
   where
@@ -313,6 +313,6 @@ mkAssessorFromPParamsInRecentEra
     :: PParamsInRecentEra
     -> TokenBundleSizeAssessor
 mkAssessorFromPParamsInRecentEra (PParamsInBabbage pp) =
-    mkTokenBundleSizeAssessor pp
+    mkTokenBundleSizeAssessor RecentEraBabbage pp
 mkAssessorFromPParamsInRecentEra (PParamsInConway pp) =
-    mkTokenBundleSizeAssessor pp
+    mkTokenBundleSizeAssessor RecentEraConway pp
