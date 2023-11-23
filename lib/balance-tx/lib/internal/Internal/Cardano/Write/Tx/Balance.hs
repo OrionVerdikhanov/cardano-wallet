@@ -710,6 +710,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
         externalSelectedUtxo <- extractExternallySelectedUTxO ptx
 
         let mSel = selectAssets
+                era
                 pp
                 utxoAssumptions
                 (extractOutputsFromTx (toCardanoApiTx partialTx))
@@ -1000,9 +1001,8 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
 -- transaction. For this, and other reasons, the selection may include too
 -- much ada.
 selectAssets
-    :: forall era changeState
-     . IsRecentEra era
-    => PParams era
+    :: forall era changeState. RecentEra era
+    -> PParams era
     -> UTxOAssumptions
     -> [W.TxOut]
     -> [Redeemer]
@@ -1016,13 +1016,12 @@ selectAssets
     -> SelectionStrategy
     -- ^ A function to assess the size of a token bundle.
     -> Either (ErrBalanceTx era) Selection
-selectAssets pp utxoAssumptions outs redeemers
-    utxoSelection balance fee0 seed changeGen selectionStrategy = do
-        validateTxOutputs'
-        performSelection'
+selectAssets era pp utxoAssumptions outs redeemers
+    utxoSelection balance fee0 seed changeGen selectionStrategy =
+        withConstraints era $ do
+            validateTxOutputs'
+            performSelection'
   where
-    era = recentEra @era
-
     validateTxOutputs'
         :: Either (ErrBalanceTx era) ()
     validateTxOutputs'
@@ -1033,13 +1032,14 @@ selectAssets pp utxoAssumptions outs redeemers
     performSelection'
         :: Either (ErrBalanceTx era) Selection
     performSelection'
-        = left coinSelectionErrorToBalanceTxError
+        = withConstraints era
+        $ left coinSelectionErrorToBalanceTxError
         $ (`evalRand` stdGenFromSeed seed) . runExceptT
         $ performSelection selectionConstraints selectionParams
 
     selectionConstraints = SelectionConstraints
         { tokenBundleSizeAssessor =
-            mkTokenBundleSizeAssessor pp
+            withConstraints era $ mkTokenBundleSizeAssessor pp
         , computeMinimumAdaQuantity = \addr tokens -> Convert.toWallet $
             computeMinimumCoinForTxOut
                 era
@@ -1118,7 +1118,7 @@ selectAssets pp utxoAssumptions outs redeemers
             then SelectionCollateralRequired
             else SelectionCollateralNotRequired
 
-    feePerByte = getFeePerByte pp
+    feePerByte = withConstraints era $ getFeePerByte pp
 
     boringFee =
         estimateTxCost
