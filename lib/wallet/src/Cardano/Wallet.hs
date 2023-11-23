@@ -1425,9 +1425,11 @@ mkExternalWithdrawal netLayer txWitnessTag mnemonic = do
     let (_, rewardAccount, derivationPath) =
             someRewardAccount @ShelleyKey mnemonic
     balance <- getCachedRewardAccountBalance netLayer rewardAccount
-    (Write.PParamsInAnyRecentEra _ pp, _) <- readNodeTipStateForTxWrite netLayer
+    (Write.PParamsInAnyRecentEra era pp, _) <-
+        readNodeTipStateForTxWrite netLayer
     let (xprv, _acct , _path) = someRewardAccount @ShelleyKey mnemonic
-    pure $ checkRewardIsWorthTxCost txWitnessTag pp balance Nothing $>
+    let worthIt = checkRewardIsWorthTxCost era txWitnessTag pp balance Nothing
+    pure $ worthIt $>
         WithdrawalExternal rewardAccount derivationPath balance xprv
 
 mkSelfWithdrawal
@@ -1438,8 +1440,10 @@ mkSelfWithdrawal
 mkSelfWithdrawal netLayer txWitnessTag db = do
     (rewardAccount, _, derivationPath) <- readRewardAccount db
     balance <- getCachedRewardAccountBalance netLayer rewardAccount
-    (Write.PParamsInAnyRecentEra _ pp, _) <- readNodeTipStateForTxWrite netLayer
-    pure $ case checkRewardIsWorthTxCost txWitnessTag pp balance Nothing of
+    (Write.PParamsInAnyRecentEra era pp, _) <-
+        readNodeTipStateForTxWrite netLayer
+    let worthIt = checkRewardIsWorthTxCost era txWitnessTag pp balance Nothing
+    pure $ case worthIt of
         Left ErrWithdrawalNotBeneficial -> NoWithdrawal
         Right () -> WithdrawalSelf rewardAccount derivationPath balance
 
@@ -1471,26 +1475,33 @@ mkSelfWithdrawalShared netLayer txWitnessTag delegationTemplateM db = do
     (rewardAccount, _, derivationPath) <-
         readRewardAccount @(SharedState n SharedKey) db
     balance <- getCachedRewardAccountBalance netLayer rewardAccount
-    (Write.PParamsInAnyRecentEra _ pp, _) <- readNodeTipStateForTxWrite netLayer
-    return $ case checkRewardIsWorthTxCost txWitnessTag pp balance delegationTemplateM of
+    (Write.PParamsInAnyRecentEra era pp, _) <-
+        readNodeTipStateForTxWrite netLayer
+    let worthIt = checkRewardIsWorthTxCost
+            era
+            txWitnessTag
+            pp
+            balance
+            delegationTemplateM
+    pure $ case worthIt of
         Left ErrWithdrawalNotBeneficial -> NoWithdrawal
         Right () -> WithdrawalSelf rewardAccount derivationPath balance
 
 checkRewardIsWorthTxCost
-    :: forall era. Write.IsRecentEra era
-    => TxWitnessTag
+    :: Write.RecentEra era
+    -> TxWitnessTag
     -> Write.PParams era
     -> Coin
     -> Maybe CA.ScriptTemplate
     -> Either ErrWithdrawalNotBeneficial ()
-checkRewardIsWorthTxCost txWitnessTag pp balance delegationTemplateM = do
+checkRewardIsWorthTxCost era txWitnessTag pp balance delegationTemplateM = do
     when (balance == Coin 0)
         $ Left ErrWithdrawalNotBeneficial
     let costOfWithdrawal = _txRewardWithdrawalCost feePerByte witType balance
     when (Coin.toInteger balance < 2 * Coin.toInteger costOfWithdrawal)
         $ Left ErrWithdrawalNotBeneficial
   where
-    feePerByte = Write.getFeePerByte (recentEra @era) pp
+    feePerByte = Write.getFeePerByte era pp
     witType = case delegationTemplateM of
         Just t -> Left t
         Nothing -> Right txWitnessTag
