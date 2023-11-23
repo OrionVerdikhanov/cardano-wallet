@@ -2205,6 +2205,7 @@ buildAndSignTransactionPure
     wallet <- get
     (unsignedBalancedTx, updatedWalletState) <- lift $
         buildTransactionPure @s @era
+            (recentEra @era)
             wallet
             timeTranslation
             utxoIndex
@@ -2307,6 +2308,7 @@ buildTransaction DBLayer{..} timeTranslation changeAddrGen
 
         fmap (\s' -> wallet { getState = s' }) <$>
             buildTransactionPure @s @era
+                (recentEra @era)
                 wallet
                 timeTranslation
                 utxo
@@ -2321,12 +2323,12 @@ buildTransaction DBLayer{..} timeTranslation changeAddrGen
 
 buildTransactionPure
     :: forall s era.
-        ( Write.IsRecentEra era
-        , WalletFlavor s
+        ( WalletFlavor s
         , Excluding '[SharedKey] (KeyOf s)
         , HasSNetworkId (NetworkOf s)
         )
-    => Wallet s
+    => Write.RecentEra era
+    -> Wallet s
     -> TimeTranslation
     -> UTxO
     -> ChangeAddressGen s
@@ -2338,22 +2340,22 @@ buildTransactionPure
         (Rand StdGen)
         (Cardano.Tx (Write.CardanoApiEra era), s)
 buildTransactionPure
-    wallet timeTranslation utxo changeAddrGen pparams preSelection txCtx
+    era wallet timeTranslation utxo changeAddrGen pparams preSelection txCtx
     = do
     unsignedTxBody <-
         withExceptT (Right . ErrConstructTxBody) . except $
-            mkUnsignedTransaction (recentEra @era)
+            mkUnsignedTransaction era
                 (networkIdVal $ sNetworkId @(NetworkOf s))
                 (Left $ unsafeShelleyOnlyGetRewardXPub @s (getState wallet))
                 txCtx
                 (Left preSelection)
     let utxoIndex =
-            Write.constructUTxOIndex (Write.recentEra @era) $
-            Write.fromWalletUTxO (Write.recentEra @era) utxo
+            Write.constructUTxOIndex era $
+            Write.fromWalletUTxO era utxo
     withExceptT Left $
-        first Write.toCardanoApiTx <$>
+        first (Write.withConstraints era Write.toCardanoApiTx) <$>
         balanceTransaction @_ @_ @s
-            (recentEra @era)
+            era
             (utxoAssumptionsForWallet (walletFlavor @s))
             pparams
             timeTranslation
@@ -2361,7 +2363,9 @@ buildTransactionPure
             changeAddrGen
             (getState wallet)
             PartialTx
-                { tx = Write.fromCardanoApiTx (Cardano.Tx unsignedTxBody [])
+                { tx =
+                    Write.withConstraints era $
+                    Write.fromCardanoApiTx (Cardano.Tx unsignedTxBody [])
                 , inputs = Write.UTxO mempty
                 , redeemers = []
                 }
