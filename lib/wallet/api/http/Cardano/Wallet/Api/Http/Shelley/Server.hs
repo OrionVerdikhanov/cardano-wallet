@@ -2599,7 +2599,7 @@ postTransactionFeeOld
     -> PostTransactionFeeOldData n
     -> Handler ApiFee
 postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
-    (Write.PParamsInAnyRecentEra _era pp, timeTranslation)
+    (Write.PParamsInAnyRecentEra era pp, timeTranslation)
         <- liftIO $ W.readNodeTipStateForTxWrite netLayer
 
     let mTTL = body ^? #timeToLive . traverse . #getQuantity
@@ -2632,7 +2632,7 @@ postTransactionFeeOld ctx@ApiLayer{..} (ApiT walletId) body = do
         pure
             $ mkApiFee Nothing minCoins
             $ W.padFeePercentiles
-                (Write.getFeePerByte pp)
+                (Write.getFeePerByte era pp)
                 padding
                 feePercentiles
   where

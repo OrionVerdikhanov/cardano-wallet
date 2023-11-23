@@ -807,12 +807,13 @@ newtype FeePerByte = FeePerByte Natural
     deriving (Show, Eq)
 
 getFeePerByte
-    :: forall era. (HasCallStack, IsRecentEra era)
-    => PParams era
+    :: HasCallStack
+    => RecentEra era
+    -> PParams era
     -> FeePerByte
-getFeePerByte pp =
+getFeePerByte era pp =
     unsafeCoinToFee $
-        case recentEra @era of
+        case era of
             RecentEraConway -> pp ^. Core.ppMinFeeAL
             RecentEraBabbage -> pp ^. Core.ppMinFeeAL
   where
@@ -861,7 +862,7 @@ evaluateMinimumFee era pp tx kwc =
     mainFee = withConstraints era $
         Shelley.evaluateTransactionFee pp tx nKeyWits
 
-    FeePerByte feePerByte = withConstraints era $ getFeePerByte pp
+    FeePerByte feePerByte = getFeePerByte era pp
 
     bootWitnessFee :: Coin
     bootWitnessFee = Coin $ intCast $ feePerByte * byteCount

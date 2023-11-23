@@ -782,7 +782,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
     let feeAndChange = TxFeeAndChange
             (unsafeFromLovelace candidateMinFee)
             (extraOutputs)
-        feePerByte = getFeePerByte pp
+        feePerByte = getFeePerByte era pp
 
     -- @distributeSurplus@ should never fail becase we have provided enough
     -- padding in @selectAssets@.
@@ -1115,7 +1115,7 @@ selectAssets era pp utxoAssumptions outs redeemers
             then SelectionCollateralRequired
             else SelectionCollateralNotRequired
 
-    feePerByte = withConstraints era $ getFeePerByte pp
+    feePerByte = getFeePerByte era pp
 
     boringFee =
         estimateTxCost

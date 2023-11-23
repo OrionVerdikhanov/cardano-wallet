@@ -1224,7 +1224,7 @@ txConstraints protocolParams witnessTag = TxConstraints
     constantTxFee = Write.withConstraints era $
         Convert.toWallet $ protocolParams ^. Ledger.ppMinFeeBL
 
-    feePerByte = Write.getFeePerByte protocolParams
+    feePerByte = Write.getFeePerByte era protocolParams
 
     txBaseSize =
         estimateTxSize empty

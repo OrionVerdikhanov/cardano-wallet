@@ -1490,7 +1490,7 @@ checkRewardIsWorthTxCost txWitnessTag pp balance delegationTemplateM = do
     when (Coin.toInteger balance < 2 * Coin.toInteger costOfWithdrawal)
         $ Left ErrWithdrawalNotBeneficial
   where
-    feePerByte = Write.getFeePerByte pp
+    feePerByte = Write.getFeePerByte (recentEra @era) pp
     witType = case delegationTemplateM of
         Just t -> Left t
         Nothing -> Right txWitnessTag
