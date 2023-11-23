@@ -1017,10 +1017,9 @@ selectAssets
     -- ^ A function to assess the size of a token bundle.
     -> Either (ErrBalanceTx era) Selection
 selectAssets era pp utxoAssumptions outs redeemers
-    utxoSelection balance fee0 seed changeGen selectionStrategy =
-        withConstraints era $ do
-            validateTxOutputs'
-            performSelection'
+    utxoSelection balance fee0 seed changeGen selectionStrategy = do
+        validateTxOutputs'
+        performSelection'
   where
     validateTxOutputs'
         :: Either (ErrBalanceTx era) ()
@@ -1032,8 +1031,7 @@ selectAssets era pp utxoAssumptions outs redeemers
     performSelection'
         :: Either (ErrBalanceTx era) Selection
     performSelection'
-        = withConstraints era
-        $ left coinSelectionErrorToBalanceTxError
+        = left (coinSelectionErrorToBalanceTxError era)
         $ (`evalRand` stdGenFromSeed seed) . runExceptT
         $ performSelection selectionConstraints selectionParams
 
@@ -1560,10 +1558,10 @@ toWalletTxOut RecentEraConway = Convert.fromConwayTxOut
 -- | Maps an error from the coin selection API to a balanceTx error.
 --
 coinSelectionErrorToBalanceTxError
-    :: forall era. IsRecentEra era
-    => SelectionError WalletSelectionContext
+    :: RecentEra era
+    -> SelectionError WalletSelectionContext
     -> ErrBalanceTx era
-coinSelectionErrorToBalanceTxError = \case
+coinSelectionErrorToBalanceTxError era = withConstraints era $ \case
     SelectionBalanceErrorOf balanceErr ->
         case balanceErr of
             BalanceInsufficient e ->
@@ -1595,7 +1593,7 @@ coinSelectionErrorToBalanceTxError = \case
                 = largestCombinationAvailable
                 & fmap W.TokenBundle.fromCoin
                 & toExternalUTxOMap
-                & fromWalletUTxO (recentEra @era)
+                & fromWalletUTxO era
             , minimumCollateralAmount
                 = Convert.toLedgerCoin minimumSelectionAmount
             }
