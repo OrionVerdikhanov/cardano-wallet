@@ -2215,6 +2215,7 @@ buildAndSignTransactionPure
     pp txLayer changeAddrGen preSelection txCtx = do
     wallet <- get
     (unsignedBalancedTx, updatedWalletState) <- lift $
+        first (Write.withConstraints (recentEra @era) Write.toCardanoApiTx) <$>
         buildTransactionPure @s @era
             (recentEra @era)
             wallet
@@ -2317,7 +2318,10 @@ buildTransaction DBLayer{..} timeTranslation changeAddrGen
 
         let utxo = availableUTxO @s pendingTxs wallet
 
-        fmap (\s' -> wallet { getState = s' }) <$>
+        let toCardanoApiTx =
+                Write.withConstraints (recentEra @era) Write.toCardanoApiTx
+
+        fmap (\s' -> wallet { getState = s' }) . first toCardanoApiTx <$>
             buildTransactionPure @s @era
                 (recentEra @era)
                 wallet
@@ -2349,7 +2353,7 @@ buildTransactionPure
     -> ExceptT
         (Either (ErrBalanceTx era) ErrConstructTx)
         (Rand StdGen)
-        (Cardano.Tx (Write.CardanoApiEra era), s)
+        (Write.Tx era, s)
 buildTransactionPure
     era wallet timeTranslation utxo changeAddrGen pparams preSelection txCtx
     = do
@@ -2364,7 +2368,6 @@ buildTransactionPure
             Write.constructUTxOIndex era $
             Write.fromWalletUTxO era utxo
     withExceptT Left $
-        first (Write.withConstraints era Write.toCardanoApiTx) <$>
         balanceTransaction @_ @_ @s
             era
             (utxoAssumptionsForWallet (walletFlavor @s))
