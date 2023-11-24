@@ -581,7 +581,7 @@ instance Write.IsRecentEra era => IsServerError (ErrBalanceTx era) where
                 , "outputs could not be found:\n"
                 , pretty $ NE.toList $ show <$> ins
                 ]
-        ErrBalanceTxInputResolutionConflicts conflicts -> do
+        ErrBalanceTxInputResolutionConflicts (_, conflicts) -> do
             let conflictF (a, b) = build (show a) <> "\nvs\n" <> build (show b)
             apiError err400 InputResolutionConflicts $ mconcat
                 [ "At least one of the inputs you've told me about has an"

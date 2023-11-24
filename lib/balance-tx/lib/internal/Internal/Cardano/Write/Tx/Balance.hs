@@ -431,9 +431,8 @@ data ErrBalanceTx era
     | ErrBalanceTxAssignRedeemers ErrAssignRedeemers
     | ErrBalanceTxInternalError
         (RecentEra era, ErrBalanceTxInternalError era)
-    | IsRecentEra era
-        => ErrBalanceTxInputResolutionConflicts
-        (NonEmpty (TxOut era, TxOut era))
+    | ErrBalanceTxInputResolutionConflicts
+        (RecentEra era, NonEmpty (TxOut era, TxOut era))
     | ErrBalanceTxUnresolvedInputs (NonEmpty TxIn)
     | ErrBalanceTxOutputError ErrBalanceTxOutputError
     | ErrBalanceTxUnableToCreateChange ErrBalanceTxUnableToCreateChangeError
@@ -924,7 +923,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
             [] -> return ()
             (c : cs) -> throwE
                 $ withConstraints era
-                $ ErrBalanceTxInputResolutionConflicts (c :| cs)
+                $ ErrBalanceTxInputResolutionConflicts (era, c :| cs)
 
     combinedUTxO :: UTxO era
     combinedUTxO = withConstraints era $ mconcat
