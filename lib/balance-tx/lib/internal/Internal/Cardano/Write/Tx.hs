@@ -745,13 +745,13 @@ toCardanoApiTx era = withConstraints era $
     CardanoApi.ShelleyTx (shelleyBasedEraFromRecentEra era)
 
 toCardanoApiUTxO
-    :: forall era. IsRecentEra era
-    => Shelley.UTxO era
+    :: RecentEra era
+    -> Shelley.UTxO era
     -> CardanoApi.UTxO (CardanoApiEra era)
-toCardanoApiUTxO = withConstraints (recentEra @era) $
+toCardanoApiUTxO era = withConstraints era $
     CardanoApi.UTxO
     . Map.mapKeys CardanoApi.fromShelleyTxIn
-    . Map.map (CardanoApi.fromShelleyTxOut (shelleyBasedEra @era))
+    . Map.map (CardanoApi.fromShelleyTxOut shelleyBasedEra)
     . unUTxO
   where
     unUTxO (Shelley.UTxO m) = m

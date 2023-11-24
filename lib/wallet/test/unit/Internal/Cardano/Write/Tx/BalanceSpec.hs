@@ -885,7 +885,7 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
                     dummyTimeTranslation
                     testStdGenSeed
                     ptx
-                combinedUTxO = toCardanoApiUTxO $ mconcat
+                combinedUTxO = toCardanoApiUTxO RecentEraBabbage $ mconcat
                     [ view #inputs ptx
                     , fromWalletUTxO RecentEraBabbage walletUTxO
                     ]
@@ -2194,7 +2194,7 @@ restrictResolution
     -> PartialTx era
 restrictResolution (PartialTx tx inputs redeemers) =
     let
-        CardanoApi.UTxO u = toCardanoApiUTxO @era inputs
+        CardanoApi.UTxO u = toCardanoApiUTxO (recentEra @era) inputs
         u' = u `Map.restrictKeys`
             inputsInTx (toCardanoApiTx (recentEra @era) tx)
         inputs' = fromCardanoApiUTxO @era (CardanoApi.UTxO u')
@@ -2782,7 +2782,8 @@ shrinkInputResolution
 shrinkInputResolution =
     shrinkMapBy utxoFromList utxoToList shrinkUTxOEntries
    where
-     utxoToList = Map.toList . CardanoApi.unUTxO . toCardanoApiUTxO @era
+     utxoToList =
+        Map.toList . CardanoApi.unUTxO . toCardanoApiUTxO (recentEra @era)
      utxoFromList = fromCardanoApiUTxO @era . CardanoApi.UTxO . Map.fromList
 
      -- NOTE: We only want to shrink the outputs, keeping the inputs and length

@@ -127,7 +127,7 @@ spec = do
         it "is isomorphic to CardanoApi.UTxO" $ do
             testIsomorphism
                 (NamedFun
-                    (toCardanoApiUTxO @BabbageEra)
+                    (toCardanoApiUTxO RecentEraBabbage)
                     "toCardanoApiUTxO")
                 (NamedFun
                     (fromCardanoApiUTxO @BabbageEra)
