@@ -767,10 +767,10 @@ fromCardanoApiUTxO era = withConstraints era $
     . CardanoApi.unUTxO
 
 toCardanoApiValue
-    :: forall era. IsRecentEra era
-    => Core.Value era
+    :: RecentEra era
+    -> Core.Value era
     -> CardanoApi.Value
-toCardanoApiValue = withConstraints (recentEra @era) CardanoApi.fromMaryValue
+toCardanoApiValue era = withConstraints era CardanoApi.fromMaryValue
 
 toCardanoApiLovelace :: Coin -> CardanoApi.Lovelace
 toCardanoApiLovelace = CardanoApi.fromShelleyLovelace

@@ -1595,7 +1595,7 @@ prop_balanceTransactionValid
         :: CardanoApi.Tx (CardanoApiEra era)
         -> UTxO era
         -> CardanoApi.Value
-    txBalance tx u = Write.toCardanoApiValue @era $
+    txBalance tx u = Write.toCardanoApiValue era $
         Write.evaluateTransactionBalance
             era
             ledgerPParams
