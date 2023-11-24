@@ -1033,10 +1033,10 @@ instance IsServerError ErrCreateMigrationPlan where
                 ]
 
 instance
-    Write.IsRecentEra era =>
-    IsServerError (ErrBalanceTxInsufficientCollateralError era)
+    IsServerError
+        (Write.RecentEra era, ErrBalanceTxInsufficientCollateralError era)
   where
-    toServerError e =
+    toServerError (era, e) =
         apiError err403 InsufficientCollateral $ T.unwords
             [ "I'm unable to create this transaction because the balance"
             , "of pure ada UTxOs in your wallet is insufficient to cover"
@@ -1047,7 +1047,7 @@ instance
             , pretty $ listF $ L.sort
                 $ fmap (view #coin . view #tokens . snd)
                 $ UTxO.toList
-                $ Write.toWalletUTxO (Write.recentEra @era)
+                $ Write.toWalletUTxO era
                 $ view #largestCombinationAvailable e
             , "To fix this, you'll need to add one or more pure ada UTxOs"
             , "to your wallet that can cover the minimum amount required."

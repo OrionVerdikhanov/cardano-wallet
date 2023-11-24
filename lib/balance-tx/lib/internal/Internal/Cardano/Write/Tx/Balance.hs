@@ -425,9 +425,8 @@ data ErrBalanceTx era
     | ErrBalanceTxExistingCollateral
     | ErrBalanceTxExistingTotalCollateral
     | ErrBalanceTxExistingReturnCollateral
-    | IsRecentEra era
-        => ErrBalanceTxInsufficientCollateral
-        (ErrBalanceTxInsufficientCollateralError era)
+    | ErrBalanceTxInsufficientCollateral
+        (RecentEra era, ErrBalanceTxInsufficientCollateralError era)
     | ErrBalanceTxConflictingNetworks
     | ErrBalanceTxAssignRedeemers ErrAssignRedeemers
     | IsRecentEra era
@@ -444,8 +443,8 @@ data ErrBalanceTx era
     --   - the given UTxO index is empty.
     -- A transaction must have at least one input in order to be valid.
 
-deriving instance Eq (ErrBalanceTx era)
-deriving instance Show (ErrBalanceTx era)
+deriving instance IsRecentEra era => Eq (ErrBalanceTx era)
+deriving instance IsRecentEra era => Show (ErrBalanceTx era)
 
 -- | A 'PartialTx' is an an unbalanced 'SealedTx' along with the necessary
 -- information to balance it.
@@ -1586,7 +1585,7 @@ coinSelectionErrorToBalanceTxError era = withConstraints era $ \case
         { largestCombinationAvailable
         , minimumSelectionAmount
         } ->
-        ErrBalanceTxInsufficientCollateral
+        ErrBalanceTxInsufficientCollateral . (era,) $
         ErrBalanceTxInsufficientCollateralError
             { largestCombinationAvailable
                 = largestCombinationAvailable
