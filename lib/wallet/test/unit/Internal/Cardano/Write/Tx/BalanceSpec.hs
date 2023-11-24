@@ -2197,7 +2197,7 @@ restrictResolution (PartialTx tx inputs redeemers) =
         CardanoApi.UTxO u = toCardanoApiUTxO (recentEra @era) inputs
         u' = u `Map.restrictKeys`
             inputsInTx (toCardanoApiTx (recentEra @era) tx)
-        inputs' = fromCardanoApiUTxO @era (CardanoApi.UTxO u')
+        inputs' = fromCardanoApiUTxO (recentEra @era) (CardanoApi.UTxO u')
     in
         PartialTx tx inputs' redeemers
   where
@@ -2231,7 +2231,7 @@ txMinFee tx@(CardanoApi.Tx body _) u =
         RecentEraBabbage
         (mockPParamsForBalancing @Write.BabbageEra)
         (fromCardanoApiTx Write.RecentEraBabbage tx)
-        (estimateKeyWitnessCount (fromCardanoApiUTxO u) body)
+        (estimateKeyWitnessCount (fromCardanoApiUTxO RecentEraBabbage u) body)
 
 withValidityInterval
     :: ValidityInterval
@@ -2646,7 +2646,7 @@ instance Arbitrary (PartialTx Write.BabbageEra) where
         let redeemers = []
         return $ PartialTx
             (fromCardanoApiTx RecentEraBabbage tx)
-            (fromCardanoApiUTxO inputUTxO)
+            (fromCardanoApiUTxO RecentEraBabbage inputUTxO)
             (redeemers)
     shrink (PartialTx tx inputUTxO redeemers) =
         [ PartialTx tx inputUTxO' redeemers
@@ -2784,7 +2784,8 @@ shrinkInputResolution =
    where
      utxoToList =
         Map.toList . CardanoApi.unUTxO . toCardanoApiUTxO (recentEra @era)
-     utxoFromList = fromCardanoApiUTxO @era . CardanoApi.UTxO . Map.fromList
+     utxoFromList =
+        fromCardanoApiUTxO (recentEra @era) . CardanoApi.UTxO . Map.fromList
 
      -- NOTE: We only want to shrink the outputs, keeping the inputs and length
      -- of the list the same.

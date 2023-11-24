@@ -26,7 +26,6 @@ import Data.Default
     )
 import Internal.Cardano.Write.Tx
     ( AnyRecentEra
-    , BabbageEra
     , RecentEra (..)
     , computeMinimumCoinForTxOut
     , datumHashFromBytes
@@ -130,7 +129,7 @@ spec = do
                     (toCardanoApiUTxO RecentEraBabbage)
                     "toCardanoApiUTxO")
                 (NamedFun
-                    (fromCardanoApiUTxO @BabbageEra)
+                    (fromCardanoApiUTxO RecentEraBabbage)
                     "fromCardanoApiUTxO")
                 id
 
