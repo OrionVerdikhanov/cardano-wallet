@@ -727,14 +727,14 @@ emptyTx era = withConstraints era $ Core.mkBasicTx Core.mkBasicTxBody
 --------------------------------------------------------------------------------
 
 fromCardanoApiTx
-    :: forall era. IsRecentEra era
-    => CardanoApi.Tx (CardanoApiEra era)
+    :: RecentEra era
+    -> CardanoApi.Tx (CardanoApiEra era)
     -> Core.Tx era
-fromCardanoApiTx = \case
+fromCardanoApiTx era = \case
     CardanoApi.ShelleyTx _era tx ->
-        tx
+        withConstraints era tx
     CardanoApi.ByronTx {} ->
-        case (recentEra @era) of
+        case era of
             {}
 
 toCardanoApiTx
