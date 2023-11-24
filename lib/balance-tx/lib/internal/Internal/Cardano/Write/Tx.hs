@@ -51,6 +51,7 @@ module Internal.Cardano.Write.Tx
     , cardanoEra
     , shelleyBasedEra
     , CardanoApi.ShelleyLedgerEra
+    , anyCardanoEraFromRecentEra
     , cardanoEraFromRecentEra
     , shelleyBasedEraFromRecentEra
     , fromCardanoApiTx
@@ -396,6 +397,11 @@ instance IsRecentEra BabbageEra where
 
 instance IsRecentEra ConwayEra where
     recentEra = RecentEraConway
+
+anyCardanoEraFromRecentEra :: RecentEra era -> CardanoApi.AnyCardanoEra
+anyCardanoEraFromRecentEra = \case
+    RecentEraBabbage -> CardanoApi.AnyCardanoEra CardanoApi.BabbageEra
+    RecentEraConway -> CardanoApi.AnyCardanoEra CardanoApi.ConwayEra
 
 cardanoEraFromRecentEra
     :: RecentEra era
