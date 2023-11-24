@@ -712,7 +712,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
                 era
                 pp
                 utxoAssumptions
-                (extractOutputsFromTx (toCardanoApiTx partialTx))
+                (extractOutputsFromTx (toCardanoApiTx era partialTx))
                 redeemers
                 (UTxOSelection.fromIndexPair
                     (internalUtxoAvailable, externalSelectedUtxo))
@@ -897,7 +897,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
       where
         cardanoApiTxBody :: CardanoApi.TxBody (CardanoApiEra era)
         cardanoApiTxBody =
-            let CardanoApi.Tx body _ = toCardanoApiTx tx
+            let CardanoApi.Tx body _ = toCardanoApiTx era tx
             in body
 
     -- | Ensure the wallet UTxO is consistent with a provided @CardanoApi.UTxO@.

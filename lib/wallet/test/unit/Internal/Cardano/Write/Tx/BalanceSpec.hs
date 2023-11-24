@@ -1109,7 +1109,7 @@ spec_estimateSignedTxSize = describe "estimateSignedTxSize" $ do
         -> IO ()
     test _name bs tx = do
         let pparams = mockPParamsForBalancing @era
-            CardanoApi.Tx cardanoApiBody _ = toCardanoApiTx tx
+            CardanoApi.Tx cardanoApiBody _ = toCardanoApiTx (recentEra @era) tx
             witCount dummyAddr = estimateKeyWitnessCount
                 (utxoPromisingInputsHaveAddress era dummyAddr tx)
                 (cardanoApiBody)
@@ -1348,7 +1348,7 @@ prop_balanceTransactionValid
         let combinedUTxO =
                 view #inputs partialTx
                 <> fromWalletUTxO (recentEra @era) walletUTxO
-        let originalTx = toCardanoApiTx (view #tx partialTx)
+        let originalTx = toCardanoApiTx (recentEra @era) (view #tx partialTx)
         let originalBalance = txBalance originalTx combinedUTxO
         let originalOuts = txOutputs originalTx
         let classifications =
@@ -1642,7 +1642,7 @@ prop_bootstrapWitnesses
   where
     emptyCardanoTxBody = body
       where
-        CardanoApi.Tx body _ = toCardanoApiTx $ Write.emptyTx era
+        CardanoApi.Tx body _ = toCardanoApiTx era $ Write.emptyTx era
 
     rootK = Byron.generateKeyFromSeed dummyMnemonic mempty
     pwd = mempty
@@ -2079,7 +2079,7 @@ balanceTx
                 genChange
                 s
                 partialTx
-        pure (Write.toCardanoApiTx transactionInEra)
+        pure (Write.toCardanoApiTx (recentEra @era) transactionInEra)
   where
     utxoIndex = constructUTxOIndex (recentEra @era) $
         fromWalletUTxO (recentEra @era) utxo
@@ -2096,7 +2096,7 @@ balanceTransactionWithDummyChangeState
         (CardanoApi.Tx (CardanoApiEra era), DummyChangeState)
 balanceTransactionWithDummyChangeState utxoAssumptions utxo seed partialTx =
     (`evalRand` stdGenFromSeed seed) $ runExceptT $
-        first Write.toCardanoApiTx <$>
+        first (Write.toCardanoApiTx (recentEra @era)) <$>
         balanceTransaction
             (recentEra @era)
             utxoAssumptions
@@ -2122,11 +2122,12 @@ hasInsCollateral
     -> Bool
 hasInsCollateral
     -- TODO: Use ledger functions here:
-    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
-        case CardanoApi.txInsCollateral content of
-            CardanoApi.TxInsCollateralNone -> False
-            CardanoApi.TxInsCollateral _ [] -> False
-            CardanoApi.TxInsCollateral _ _ -> True
+    (toCardanoApiTx (recentEra @era) ->
+        CardanoApi.Tx (CardanoApi.TxBody content) _) =
+            case CardanoApi.txInsCollateral content of
+                CardanoApi.TxInsCollateralNone -> False
+                CardanoApi.TxInsCollateral _ [] -> False
+                CardanoApi.TxInsCollateral _ _ -> True
 
 hasReturnCollateral
     :: forall era. IsRecentEra era
@@ -2134,10 +2135,11 @@ hasReturnCollateral
     -> Bool
 hasReturnCollateral
     -- TODO: Use ledger functions here:
-    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
-        case CardanoApi.txReturnCollateral content of
-            CardanoApi.TxReturnCollateralNone -> False
-            CardanoApi.TxReturnCollateral _ _ -> True
+    (toCardanoApiTx (recentEra @era) ->
+        CardanoApi.Tx (CardanoApi.TxBody content) _) =
+            case CardanoApi.txReturnCollateral content of
+                CardanoApi.TxReturnCollateralNone -> False
+                CardanoApi.TxReturnCollateral _ _ -> True
 
 hasTotalCollateral
     :: forall era. IsRecentEra era
@@ -2145,10 +2147,11 @@ hasTotalCollateral
     -> Bool
 hasTotalCollateral
     -- TODO: Use ledger functions here:
-    (toCardanoApiTx @era -> CardanoApi.Tx (CardanoApi.TxBody content) _) =
-        case CardanoApi.txTotalCollateral content of
-            CardanoApi.TxTotalCollateralNone -> False
-            CardanoApi.TxTotalCollateral _ _ -> True
+    (toCardanoApiTx (recentEra @era) ->
+        CardanoApi.Tx (CardanoApi.TxBody content) _) =
+            case CardanoApi.txTotalCollateral content of
+                CardanoApi.TxTotalCollateralNone -> False
+                CardanoApi.TxTotalCollateral _ _ -> True
 
 mkTestWallet :: W.UTxO -> Wallet'
 mkTestWallet utxo =
@@ -2192,7 +2195,8 @@ restrictResolution
 restrictResolution (PartialTx tx inputs redeemers) =
     let
         CardanoApi.UTxO u = toCardanoApiUTxO @era inputs
-        u' = u `Map.restrictKeys` (inputsInTx (toCardanoApiTx @era tx))
+        u' = u `Map.restrictKeys`
+            inputsInTx (toCardanoApiTx (recentEra @era) tx)
         inputs' = fromCardanoApiUTxO @era (CardanoApi.UTxO u')
     in
         PartialTx tx inputs' redeemers
@@ -2652,7 +2656,7 @@ instance Arbitrary (PartialTx Write.BabbageEra) where
             PartialTx (fromCardanoApiTx RecentEraBabbage tx')
             inputUTxO
             redeemers
-        | tx' <- shrinkTxBabbage (toCardanoApiTx tx)
+        | tx' <- shrinkTxBabbage (toCardanoApiTx RecentEraBabbage tx)
         ]
 
 instance Arbitrary StdGenSeed  where
