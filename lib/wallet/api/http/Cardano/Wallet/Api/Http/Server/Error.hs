@@ -620,7 +620,8 @@ instance forall era. IsServerError (ErrBalanceTxInternalError era) where
           where
             info = ApiErrorBalanceTxUnderestimatedFee
                 { underestimation = Coin.toQuantity $ toWalletCoin coin
-                , candidateTxHex = hexText $ Write.serializeTx @era candidateTx
+                , candidateTxHex = hexText $
+                    Write.serializeTx (Write.recentEra @era) candidateTx
                 , candidateTxReadable = T.pack (show candidateTx)
                 , estimatedNumberOfKeyWits = intCast nWits
                 , estimatedNumberOfBootstrapKeyWits = intCast nBootWits

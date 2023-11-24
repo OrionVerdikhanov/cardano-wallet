@@ -698,10 +698,11 @@ utxoFromTxOutsInRecentEra era = withConstraints era $
 --------------------------------------------------------------------------------
 
 serializeTx
-    :: forall era. IsRecentEra era
-    => Core.Tx era
+    :: RecentEra era
+    -> Core.Tx era
     -> ByteString
-serializeTx tx = CardanoApi.serialiseToCBOR $ toCardanoApiTx (recentEra @era) tx
+serializeTx era tx =
+    withConstraints era $ CardanoApi.serialiseToCBOR $ toCardanoApiTx era tx
 
 txBody
     :: RecentEra era

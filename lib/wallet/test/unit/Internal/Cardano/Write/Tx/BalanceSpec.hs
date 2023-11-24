@@ -832,7 +832,7 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
                     . T.pack
                     . B8.unpack
                     . hex
-                    . serializeTx @BabbageEra
+                    . serializeTx RecentEraBabbage
                     $ x
                 , readFromFile =
                     fmap (deserializeBabbageTx . unsafeFromHex . B8.pack)
@@ -1242,7 +1242,7 @@ spec_updateTx = describe "updateTx" $ do
                             then do
                                 let
                                     newEncoding = convertToBase Base16 $
-                                        serializeTx tx'
+                                        serializeTx (recentEra @era) tx'
                                     rejectFilePath
                                         = $(getTestData)
                                         </> "plutus"
@@ -1255,7 +1255,9 @@ spec_updateTx = describe "updateTx" $ do
                                     , rejectFilePath
                                     ]
                             else
-                                serializeTx tx `shouldBe` serializeTx tx'
+                                serializeTx (recentEra @era) tx
+                                `shouldBe`
+                                serializeTx (recentEra @era) tx'
 
             prop ("with TxUpdate: " <> filepath) $
                 prop_updateTx tx
@@ -2208,7 +2210,7 @@ serializedSize
     :: forall era. IsRecentEra era
     => Tx era
     -> Int
-serializedSize = BS.length . serializeTx
+serializedSize = BS.length . serializeTx (recentEra @era)
 
 -- | Checks for membership in the given closed interval [a, b]
 shouldBeInclusivelyWithin :: (Ord a, Show a) => a -> (a, a) -> IO ()
