@@ -3001,8 +3001,8 @@ transactionFee DBLayer{atomically, walletState} protocolParams
             -- strict, and each field is defined in terms of 'Data.Map.Strict'.
             --
             evaluate
-                $ Write.constructUTxOIndex (Write.recentEra @era)
-                $ Write.fromWalletUTxO (Write.recentEra @era)
+                $ Write.constructUTxOIndex era
+                $ Write.fromWalletUTxO era
                 $ availableUTxO mempty wallet
         unsignedTxBody <- wrapErrMkTransaction $
             mkUnsignedTransaction era
@@ -3021,7 +3021,7 @@ transactionFee DBLayer{atomically, walletState} protocolParams
             res <- runExceptT $
                 first (Write.toCardanoApiTx era) <$>
                     balanceTransaction @_ @_ @s
-                        (recentEra @era)
+                        era
                         (utxoAssumptionsForWallet (walletFlavor @s))
                         protocolParams
                         timeTranslation
@@ -3035,7 +3035,7 @@ transactionFee DBLayer{atomically, walletState} protocolParams
                         Cardano.TxFeeExplicit _ coin
                             -> Fee (fromCardanoLovelace coin)
                         Cardano.TxFeeImplicit Cardano.TxFeesImplicitInByronEra
-                            -> case Write.recentEra @era of {}
+                            -> case era of {}
                 Left (e@(ErrBalanceTxUnableToCreateChange _))
                     -> throwE e
                 Left otherErr -> throwIO $ ExceptionBalanceTx otherErr
