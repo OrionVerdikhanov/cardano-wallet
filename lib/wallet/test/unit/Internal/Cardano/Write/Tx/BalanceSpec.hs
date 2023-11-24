@@ -1450,7 +1450,7 @@ prop_balanceTransactionValid
             Left ErrBalanceTxUnableToCreateInput ->
                 label "unable to create input" $ property True
             Left (ErrBalanceTxInternalError
-                 (ErrUnderestimatedFee delta candidateTx nWits)) ->
+                 (_, ErrUnderestimatedFee delta candidateTx nWits)) ->
                 let counterexampleText = unlines
                         [ "underestimated fee by "
                             <> pretty (Convert.toWalletCoin delta)

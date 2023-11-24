@@ -609,8 +609,10 @@ instance Write.IsRecentEra era => IsServerError (ErrBalanceTx era) where
                 , "or sending a smaller amount."
                 ]
 
-instance forall era. IsServerError (ErrBalanceTxInternalError era) where
-    toServerError = \case
+instance
+    IsServerError (Write.RecentEra era, ErrBalanceTxInternalError era)
+  where
+    toServerError (era, e) = case e of
         ErrUnderestimatedFee coin candidateTx (KeyWitnessCount nWits nBootWits) ->
             apiError err500 (BalanceTxUnderestimatedFee info) $ T.unwords
                 [ "I have somehow underestimated the fee of the transaction by"
@@ -620,8 +622,7 @@ instance forall era. IsServerError (ErrBalanceTxInternalError era) where
           where
             info = ApiErrorBalanceTxUnderestimatedFee
                 { underestimation = Coin.toQuantity $ toWalletCoin coin
-                , candidateTxHex = hexText $
-                    Write.serializeTx (Write.recentEra @era) candidateTx
+                , candidateTxHex = hexText $ Write.serializeTx era candidateTx
                 , candidateTxReadable = T.pack (show candidateTx)
                 , estimatedNumberOfKeyWits = intCast nWits
                 , estimatedNumberOfBootstrapKeyWits = intCast nBootWits

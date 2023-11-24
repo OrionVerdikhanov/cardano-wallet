@@ -429,8 +429,8 @@ data ErrBalanceTx era
         (RecentEra era, ErrBalanceTxInsufficientCollateralError era)
     | ErrBalanceTxConflictingNetworks
     | ErrBalanceTxAssignRedeemers ErrAssignRedeemers
-    | IsRecentEra era
-        => ErrBalanceTxInternalError (ErrBalanceTxInternalError era)
+    | ErrBalanceTxInternalError
+        (RecentEra era, ErrBalanceTxInternalError era)
     | IsRecentEra era
         => ErrBalanceTxInputResolutionConflicts
         (NonEmpty (TxOut era, TxOut era))
@@ -772,7 +772,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
             | otherwise ->
                 throwE
                 $ withConstraints era
-                $ ErrBalanceTxInternalError
+                $ ErrBalanceTxInternalError . (era,)
                 $ ErrUnderestimatedFee
                     (Coin (-c))
                     candidateTx
@@ -787,7 +787,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
     -- padding in @selectAssets@.
     TxFeeAndChange updatedFee updatedChange <- withExceptT
         (\(ErrMoreSurplusNeeded c) ->
-            ErrBalanceTxInternalError
+            ErrBalanceTxInternalError . (era,)
                 $ withConstraints era
                 $ ErrUnderestimatedFee
                     (Convert.toLedgerCoin c)
@@ -871,8 +871,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
         if bal == mempty
             then pure tx
             else throwE
-                $ ErrBalanceTxInternalError
-                $ ErrFailedBalancing bal
+                $ ErrBalanceTxInternalError (era, ErrFailedBalancing bal)
 
     txBalance :: Tx era -> Value
     txBalance
