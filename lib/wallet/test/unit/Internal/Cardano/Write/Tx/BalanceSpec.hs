@@ -630,11 +630,13 @@ spec_balanceTransaction = describe "balanceTransaction" $ do
 
     describe "effect of txMaxSize on coin selection" $ do
 
-        let balanceWithDust = fmap fromCardanoApiTx . balanceTx
-                dustWallet
-                mockPParamsForBalancing
-                dummyTimeTranslation
-                testStdGenSeed
+        let balanceWithDust
+                = fmap (fromCardanoApiTx RecentEraBabbage)
+                . balanceTx
+                    dustWallet
+                    mockPParamsForBalancing
+                    dummyTimeTranslation
+                    testStdGenSeed
 
         let totalOutput :: Tx BabbageEra -> Coin
             totalOutput tx =
@@ -813,12 +815,14 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
         let walletUTxO = utxo [W.Coin 5_000_000]
         it "pingPong_2" $ do
             let ptx = pingPong_2
-            let tx = fromCardanoApiTx $ either (error . show) id $ balanceTx
-                    (mkTestWallet walletUTxO)
-                    mockPParamsForBalancing
-                    dummyTimeTranslation
-                    testStdGenSeed
-                    ptx
+            let tx = fromCardanoApiTx RecentEraBabbage
+                    $ either (error . show) id
+                    $ balanceTx
+                        (mkTestWallet walletUTxO)
+                        mockPParamsForBalancing
+                        dummyTimeTranslation
+                        testStdGenSeed
+                        ptx
 
             let name = "pingPong_2"
             Golden
@@ -911,7 +915,11 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
         ]
 
     delegate :: PartialTx BabbageEra
-    delegate = PartialTx (fromCardanoApiTx $ CardanoApi.Tx body []) mempty []
+    delegate =
+        PartialTx
+            (fromCardanoApiTx RecentEraBabbage $ CardanoApi.Tx body [])
+            mempty
+            []
       where
         body = CardanoApi.ShelleyTxBody
             CardanoApi.ShelleyBasedEraBabbage
@@ -1515,7 +1523,7 @@ prop_balanceTransactionValid
         let (W.TxSize size) =
                 estimateSignedTxSize era ledgerPParams
                     (estimateKeyWitnessCount utxo body)
-                    (fromCardanoApiTx tx)
+                    (fromCardanoApiTx era tx)
         let limit = ledgerPParams ^. ppMaxTxSizeL
         let msg = unwords
                 [ "The tx size "
@@ -1580,7 +1588,7 @@ prop_balanceTransactionValid
         -> CardanoApi.Lovelace
     minFee tx@(CardanoApi.Tx body _) utxo = Write.toCardanoApiLovelace
         $ Write.evaluateMinimumFee (recentEra @era) ledgerPParams
-            (fromCardanoApiTx tx)
+            (fromCardanoApiTx (recentEra @era) tx)
             (estimateKeyWitnessCount utxo body)
 
     txBalance
@@ -1592,7 +1600,7 @@ prop_balanceTransactionValid
             era
             ledgerPParams
             u
-            (Write.txBody era $ fromCardanoApiTx tx)
+            (Write.txBody era $ fromCardanoApiTx era tx)
       where
         era = recentEra @era
 
@@ -1630,7 +1638,7 @@ prop_bootstrapWitnesses
         wits :: [CardanoApi.KeyWitness (CardanoApiEra era)]
         wits = map (dummyWitForIx body) addrIxs
     in
-        p n (fromCardanoApiTx $ CardanoApi.Tx body wits)
+        p n (fromCardanoApiTx era $ CardanoApi.Tx body wits)
   where
     emptyCardanoTxBody = body
       where
@@ -2104,7 +2112,8 @@ balanceTransactionWithDummyChangeState utxoAssumptions utxo seed partialTx =
         fromWalletUTxO (recentEra @era) utxo
 
 deserializeBabbageTx :: ByteString -> Tx Write.BabbageEra
-deserializeBabbageTx = fromCardanoApiTx @BabbageEra . either (error . show) id
+deserializeBabbageTx
+    = fromCardanoApiTx RecentEraBabbage . either (error . show) id
     . CardanoApi.deserialiseFromCBOR (CardanoApi.AsTx CardanoApi.AsBabbageEra)
 
 hasInsCollateral
@@ -2155,7 +2164,10 @@ mockPParamsForBalancing =
 
 paymentPartialTx :: [W.TxOut] -> PartialTx Write.BabbageEra
 paymentPartialTx txouts =
-    PartialTx (fromCardanoApiTx $ CardanoApi.Tx body []) mempty []
+    PartialTx
+        (fromCardanoApiTx RecentEraBabbage $ CardanoApi.Tx body [])
+        mempty
+        []
   where
     body = CardanoApi.ShelleyTxBody
         CardanoApi.ShelleyBasedEraBabbage
@@ -2214,7 +2226,7 @@ txMinFee tx@(CardanoApi.Tx body _) u =
     Write.evaluateMinimumFee
         RecentEraBabbage
         (mockPParamsForBalancing @Write.BabbageEra)
-        (fromCardanoApiTx tx)
+        (fromCardanoApiTx Write.RecentEraBabbage tx)
         (estimateKeyWitnessCount (fromCardanoApiUTxO u) body)
 
 withValidityInterval
@@ -2629,7 +2641,7 @@ instance Arbitrary (PartialTx Write.BabbageEra) where
                 return (fst i, o)
         let redeemers = []
         return $ PartialTx
-            (fromCardanoApiTx tx)
+            (fromCardanoApiTx RecentEraBabbage tx)
             (fromCardanoApiUTxO inputUTxO)
             (redeemers)
     shrink (PartialTx tx inputUTxO redeemers) =
@@ -2637,7 +2649,9 @@ instance Arbitrary (PartialTx Write.BabbageEra) where
         | inputUTxO' <- shrinkInputResolution @Write.BabbageEra inputUTxO
         ] <>
         [ restrictResolution $
-            PartialTx (fromCardanoApiTx tx') inputUTxO redeemers
+            PartialTx (fromCardanoApiTx RecentEraBabbage tx')
+            inputUTxO
+            redeemers
         | tx' <- shrinkTxBabbage (toCardanoApiTx tx)
         ]
 
