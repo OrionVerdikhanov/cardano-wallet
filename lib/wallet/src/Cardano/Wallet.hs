@@ -2112,7 +2112,7 @@ buildSignSubmitTransaction db@DBLayer{..} netLayer txLayer
     pwd walletId changeAddrGen preSelection txCtx = do
     --
     stdGen <- initStdGen
-    (Write.PParamsInAnyRecentEra _era protocolParams, timeTranslation)
+    (Write.PParamsInAnyRecentEra era protocolParams, timeTranslation)
         <- readNodeTipStateForTxWrite netLayer
     let ti = timeInterpreter netLayer
     throwOnErr <=< runExceptT $ withRootKey db walletId pwd wrapRootKeyError $
@@ -2132,6 +2132,7 @@ buildSignSubmitTransaction db@DBLayer{..} netLayer txLayer
                     let wallet = WalletState.getLatest s
                         utxo = availableUTxO (Set.fromList pendingTxs) wallet
                     buildAndSignTransactionPure @k @s
+                        era
                         timeTranslation
                         utxo
                         rootKey
@@ -2190,13 +2191,13 @@ buildAndSignTransactionPure
        , IsOurs s RewardAccount
        , IsOurs s Address
        , WalletFlavor s
-       , Write.IsRecentEra era
        , k ~ KeyOf s
        , CredFromOf s ~ 'CredFromKeyK
        , Excluding '[SharedKey] k
        , HasSNetworkId (NetworkOf s)
        )
-    => TimeTranslation
+    => Write.RecentEra era
+    -> TimeTranslation
     -> UTxO
     -> k 'RootK XPrv
     -> PassphraseScheme
@@ -2211,13 +2212,13 @@ buildAndSignTransactionPure
         (ExceptT (Either (ErrBalanceTx era) ErrConstructTx) (Rand StdGen))
         BuiltTx
 buildAndSignTransactionPure
-    timeTranslation utxoIndex rootKey passphraseScheme userPassphrase
+    era timeTranslation utxoIndex rootKey passphraseScheme userPassphrase
     pp txLayer changeAddrGen preSelection txCtx = do
     wallet <- get
     (unsignedBalancedTx, updatedWalletState) <- lift $
-        first (Write.toCardanoApiTx (recentEra @era)) <$>
+        first (Write.toCardanoApiTx era) <$>
         buildTransactionPure @s @era
-            (recentEra @era)
+            era
             wallet
             timeTranslation
             utxoIndex
@@ -2234,6 +2235,11 @@ buildAndSignTransactionPure
                 -> Nothing
 
         passphrase = preparePassphrase passphraseScheme userPassphrase
+        sealedTx = sealedTxFromCardano $ case era of
+            Write.RecentEraBabbage ->
+                inAnyCardanoEra unsignedBalancedTx
+            Write.RecentEraConway ->
+                inAnyCardanoEra unsignedBalancedTx
         signedTx = signTransaction @k @'CredFromKeyK
             (keyFlavorFromState @s)
             txLayer
@@ -2244,7 +2250,7 @@ buildAndSignTransactionPure
             (RootCredentials rootKey passphrase)
             (wallet ^. #utxo)
             Nothing
-            (sealedTxFromCardano $ inAnyCardanoEra unsignedBalancedTx)
+            sealedTx
 
         ( tx
             , _tokenMapWithScripts1
@@ -2289,7 +2295,7 @@ buildAndSignTransactionPure
         }
   where
     wF = walletFlavor @s
-    anyCardanoEra = Cardano.AnyCardanoEra $ Write.cardanoEra @era
+    anyCardanoEra = Write.anyCardanoEraFromRecentEra era
 
 buildTransaction
     :: forall s era.
