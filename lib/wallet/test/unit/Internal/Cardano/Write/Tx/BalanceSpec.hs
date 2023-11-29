@@ -623,7 +623,7 @@ spec_balanceTransaction = describe "balanceTransaction" $ do
         let totalOutput :: Tx BabbageEra -> Coin
             totalOutput tx =
                 F.foldMap (view coinTxOutL) (view (bodyTxL . outputsTxBodyL) tx)
-                <> tx ^. bodyTxL . feeTxBodyL
+                <> tx ^. txFee
 
         it "tries to select 2x the payment amount" $ do
             let tx = balanceWithDust $ paymentPartialTx
@@ -1920,7 +1920,7 @@ prop_updateTx tx extraIns extraCol extraOuts newFee = do
             <> Set.fromList (fromWalletTxIn . fst <$> extraIns)
         , outputs tx' === (outputs tx)
             <> StrictSeq.fromList (fromWalletTxOut <$> extraOuts)
-        , fee tx' === Convert.toLedger newFee
+        , tx' ^. txFee === Convert.toLedger newFee
         , collateralIns tx' === collateralIns tx
             <> Set.fromList (fromWalletTxIn <$> extraCol)
         ]
@@ -1936,7 +1936,6 @@ prop_updateTx tx extraIns extraCol extraOuts newFee = do
     inputs = view (bodyTxL . inputsTxBodyL)
     outputs = view (bodyTxL . outputsTxBodyL)
     collateralIns = view (bodyTxL . collateralInputsTxBodyL)
-    fee = view (bodyTxL . feeTxBodyL)
 
 --------------------------------------------------------------------------------
 -- Utility types
