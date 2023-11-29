@@ -150,6 +150,7 @@ import Control.Lens
     , (%~)
     , (.~)
     , (^.)
+    , Lens'
     )
 import Control.Monad
     ( forM
@@ -868,7 +869,7 @@ balanceTransactionGoldenSpec = describe "balance goldens" $ do
                 case res of
                     Right tx
                         -> BalanceTxGoldenSuccess c
-                                (txFee tx)
+                                (tx ^. txFee)
                                 (minFee tx combinedUTxO)
                     Left e
                         -> BalanceTxGoldenFailure c (show e)
@@ -1341,7 +1342,7 @@ prop_balanceTransactionValid
                 label "success"
                     $ classify (originalBalance == mempty)
                         "already balanced"
-                    $ classify (txFee tx > Coin 1_000_000)
+                    $ classify (tx ^. txFee > Coin 1_000_000)
                         "fee above 1 ada"
                     $ classify (hasInsCollateral tx)
                         "balanced tx has collateral"
@@ -1443,7 +1444,7 @@ prop_balanceTransactionValid
         -> UTxO era
         -> Property
     prop_expectFeeExcessSmallerThan lim tx utxo = do
-        let fee = txFee tx
+        let fee = tx ^. txFee
         let minfee = minFee tx utxo
         let delta = fee <-> minfee
         let msg = unwords
@@ -1461,7 +1462,7 @@ prop_balanceTransactionValid
         -> UTxO era
         -> Property
     prop_minfeeIsCovered tx utxo = do
-        let fee = txFee tx
+        let fee = tx ^. txFee
         let minfee = minFee tx utxo
         let delta = minfee <-> fee
         let msg = unwords
@@ -2149,8 +2150,8 @@ cardanoToWalletTxOut =
         RecentEraBabbage -> Convert.fromBabbageTxOut x
         RecentEraConway -> Convert.fromConwayTxOut x
 
-txFee :: IsRecentEra era => Tx era -> Coin
-txFee tx = tx ^. bodyTxL . feeTxBodyL
+txFee :: IsRecentEra era => Lens' (Tx era) Coin
+txFee = bodyTxL . feeTxBodyL
 
 --------------------------------------------------------------------------------
 -- Test values
