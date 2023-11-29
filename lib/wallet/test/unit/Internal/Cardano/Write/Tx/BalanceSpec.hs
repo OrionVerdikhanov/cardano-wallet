@@ -1916,7 +1916,7 @@ prop_updateTx tx extraIns extraCol extraOuts newFee = do
     let tx' = either (error . show) id
             $ updateTx tx extra
     conjoin
-        [ inputs tx' === inputs tx
+        [ tx' ^. txInputs === tx ^. txInputs
             <> Set.fromList (fromWalletTxIn . fst <$> extraIns)
         , outputs tx' === (outputs tx)
             <> StrictSeq.fromList (fromWalletTxOut <$> extraOuts)
@@ -1933,7 +1933,6 @@ prop_updateTx tx extraIns extraCol extraOuts newFee = do
 
     fromWalletTxIn = Convert.toLedger
 
-    inputs = view (bodyTxL . inputsTxBodyL)
     outputs = view (bodyTxL . outputsTxBodyL)
     collateralIns = view (bodyTxL . collateralInputsTxBodyL)
 
@@ -1977,7 +1976,7 @@ addExtraTxIns
     -> PartialTx Write.BabbageEra
     -> PartialTx Write.BabbageEra
 addExtraTxIns extraIns =
-    #tx . bodyTxL . inputsTxBodyL %~ (<> toLedgerInputs extraIns)
+    #tx . txInputs %~ (<> toLedgerInputs extraIns)
   where
     toLedgerInputs =
         Set.map Convert.toLedger . Set.fromList
@@ -2151,6 +2150,9 @@ cardanoToWalletTxOut =
 
 txFee :: IsRecentEra era => Lens' (Tx era) Coin
 txFee = bodyTxL . feeTxBodyL
+
+txInputs :: IsRecentEra era => Lens' (Tx era) (Set TxIn)
+txInputs = bodyTxL . inputsTxBodyL
 
 --------------------------------------------------------------------------------
 -- Test values
