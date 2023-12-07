@@ -1243,7 +1243,7 @@ spec_updateTx = describe "updateTx" $ do
 
 prop_balanceTransactionExistingReturnCollateral
     :: forall era. (era ~ BabbageEra)
-    => Wallet'
+    => Wallet
     -> ShowBuildable (PartialTx era)
     -> StdGenSeed
     -> Property
@@ -1260,7 +1260,7 @@ prop_balanceTransactionExistingReturnCollateral
 
 prop_balanceTransactionExistingTotalCollateral
     :: forall era. (era ~ BabbageEra)
-    => Wallet'
+    => Wallet
     -> ShowBuildable (PartialTx era)
     -> StdGenSeed
     -> Property
@@ -1284,12 +1284,12 @@ prop_balanceTransactionValid
     :: forall era. era ~ Write.BabbageEra
     -- TODO [ADP-2997] Test with all RecentEras
     -- https://cardanofoundation.atlassian.net/browse/ADP-2997
-    => Wallet'
+    => Wallet
     -> ShowBuildable (PartialTx Write.BabbageEra)
     -> StdGenSeed
     -> Property
 prop_balanceTransactionValid
-    wallet@(Wallet' _ walletUTxO _) (ShowBuildable partialTx) seed =
+    wallet@(Wallet _ walletUTxO _) (ShowBuildable partialTx) seed =
         withMaxSuccess 1_000 $ do
         let combinedUTxO =
                 view #inputs partialTx
@@ -1948,8 +1948,8 @@ newtype DummyChangeState = DummyChangeState { nextUnusedIndex :: Int }
 newtype TxBalanceSurplus a = TxBalanceSurplus {unTxBalanceSurplus :: a}
     deriving (Eq, Show)
 
-data Wallet' = Wallet' UTxOAssumptions W.UTxO AnyChangeAddressGenWithState
-    deriving Show via (ShowBuildable Wallet')
+data Wallet = Wallet UTxOAssumptions W.UTxO AnyChangeAddressGenWithState
+    deriving Show via (ShowBuildable Wallet)
 
 --------------------------------------------------------------------------------
 -- Utility functions
@@ -1971,14 +1971,14 @@ addExtraTxIns extraIns =
 -- protocol parameters. This is up to the caller to provide.
 balanceTx
     :: forall era. IsRecentEra era
-    => Wallet'
+    => Wallet
     -> Write.PParams era
     -> TimeTranslation
     -> StdGenSeed
     -> PartialTx era
     -> Either (ErrBalanceTx era) (Tx era)
 balanceTx
-    (Wallet'
+    (Wallet
         utxoAssumptions
         utxo
         (AnyChangeAddressGenWithState genChangeAddr s))
@@ -2052,9 +2052,9 @@ hasTotalCollateral tx =
         SJust _ -> True
         SNothing -> False
 
-mkTestWallet :: W.UTxO -> Wallet'
+mkTestWallet :: W.UTxO -> Wallet
 mkTestWallet utxo =
-    Wallet' AllKeyPaymentCredentials utxo dummyShelleyChangeAddressGen
+    Wallet AllKeyPaymentCredentials utxo dummyShelleyChangeAddressGen
 
 mockPParamsForBalancing
     :: forall era . IsRecentEra era => Write.PParams era
@@ -2566,13 +2566,13 @@ instance Arbitrary W.TxOut where
         | bundle' <- W.shrinkTokenBundleSmallRange bundle
         ]
 
-instance Arbitrary Wallet' where
+instance Arbitrary Wallet where
     arbitrary = oneof
-        [ Wallet' AllKeyPaymentCredentials
+        [ Wallet AllKeyPaymentCredentials
             <$> genWalletUTxO genShelleyVkAddr
             <*> pure dummyShelleyChangeAddressGen
 
-        , Wallet' AllByronKeyPaymentCredentials
+        , Wallet AllByronKeyPaymentCredentials
             <$> genWalletUTxO genByronVkAddr
             <*> pure dummyByronChangeAddressGen
         ]
@@ -2606,8 +2606,8 @@ instance Arbitrary Wallet' where
                   where
                     era = CardanoApi.BabbageEra
 
-    shrink (Wallet' utxoAssumptions utxo changeAddressGen) =
-        [ Wallet' utxoAssumptions utxo' changeAddressGen
+    shrink (Wallet utxoAssumptions utxo changeAddressGen) =
+        [ Wallet utxoAssumptions utxo' changeAddressGen
         | utxo' <- shrinkUTxO utxo
         ]
       where
@@ -2813,8 +2813,8 @@ instance Buildable BalanceTxGolden where
             | l < 0     = "-" <> pretty (W.Coin.unsafeFromIntegral (-l))
             | otherwise = pretty (W.Coin.unsafeFromIntegral l)
 
-instance Buildable Wallet' where
-    build (Wallet' assumptions utxo changeAddressGen) =
+instance Buildable Wallet where
+    build (Wallet assumptions utxo changeAddressGen) =
         nameF "Wallet" $ mconcat
             [ nameF "assumptions" $ build assumptions
             , nameF "changeAddressGen" $ build changeAddressGen
