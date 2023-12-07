@@ -1978,10 +1978,7 @@ balanceTx
     -> PartialTx era
     -> Either (ErrBalanceTx era) (Tx era)
 balanceTx
-    (Wallet
-        utxoAssumptions
-        utxo
-        (AnyChangeAddressGenWithState genChangeAddr s))
+    (Wallet utxoAssumptions utxo (AnyChangeAddressGenWithState genChangeAddr s))
     protocolParameters
     timeTranslation
     seed
