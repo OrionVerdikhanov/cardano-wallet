@@ -93,9 +93,6 @@ import Algebra.PartialOrd
 import Cardano.Numeric.Util
     ( equipartitionNatural
     )
-import Cardano.Wallet.Primitive.Types.AssetId
-    ( AssetId (AssetId)
-    )
 import Cardano.Wallet.Primitive.Types.TokenQuantity
     ( TokenQuantity (..)
     )
@@ -194,6 +191,7 @@ import Safe
     ( fromJustNote
     )
 
+import qualified Cardano.Wallet.Primitive.Types.AssetId as W
 import qualified Cardano.Wallet.Primitive.Types.AssetName as W
 import qualified Cardano.Wallet.Primitive.Types.TokenPolicyId as W
 import qualified Cardano.Wallet.Primitive.Types.TokenQuantity as TokenQuantity
@@ -329,7 +327,7 @@ instance Buildable (Flat TokenMap) where
       where
         buildTokenMap =
             buildList buildAssetQuantity . toFlatList
-        buildAssetQuantity (AssetId policyId assetName, quantity) = buildMap
+        buildAssetQuantity (W.AssetId policyId assetName, quantity) = buildMap
             [ ("policyId",
                 build policyId)
             , ("assetName",
@@ -395,18 +393,18 @@ jsonFailWithZeroValueTokenQuantity policyId assetName = jsonFailWith $ unwords
 instance ToJSON (Flat TokenMap) where
     toJSON = toJSON . fmap fromTuple . toFlatList . getFlat
       where
-        fromTuple (AssetId policyId assetName, quantity) =
+        fromTuple (W.AssetId policyId assetName, quantity) =
             FlatAssetQuantity policyId assetName quantity
 
 instance FromJSON (Flat TokenMap) where
     parseJSON =
         fmap (Flat . fromFlatList) . mapM parseTuple <=< parseJSON
       where
-        parseTuple :: FlatAssetQuantity -> Parser (AssetId, TokenQuantity)
+        parseTuple :: FlatAssetQuantity -> Parser (W.AssetId, TokenQuantity)
         parseTuple (FlatAssetQuantity policyId assetName quantity) = do
             when (TokenQuantity.isZero quantity) $
                 jsonFailWithZeroValueTokenQuantity policyId assetName
-            pure (AssetId policyId assetName, quantity)
+            pure (W.AssetId policyId assetName, quantity)
 
 -- Used for JSON serialization only: not exported.
 data FlatAssetQuantity = FlatAssetQuantity
@@ -489,7 +487,7 @@ empty = TokenMap mempty
 -- If the specified token quantity is zero, then the resultant map will be
 -- equal to the 'empty' map.
 --
-singleton :: AssetId -> TokenQuantity -> TokenMap
+singleton :: W.AssetId -> TokenQuantity -> TokenMap
 singleton = setQuantity empty
 
 -- | Creates a token map from a flat list.
@@ -497,7 +495,7 @@ singleton = setQuantity empty
 -- If an asset name appears more than once in the list under the same policy,
 -- its associated quantities will be added together in the resultant map.
 --
-fromFlatList :: [(AssetId, TokenQuantity)] -> TokenMap
+fromFlatList :: [(W.AssetId, TokenQuantity)] -> TokenMap
 fromFlatList = F.foldl' acc empty
   where
     acc b (asset, quantity) = adjustQuantity b asset (<> quantity)
@@ -510,7 +508,7 @@ fromFlatList = F.foldl' acc empty
 fromNestedList
     :: [(W.TokenPolicyId, NonEmpty (W.AssetName, TokenQuantity))] -> TokenMap
 fromNestedList entries = fromFlatList
-    [ (AssetId policyId assetName, quantity)
+    [ (W.AssetId policyId assetName, quantity)
     | (policyId, tokenQuantities) <- entries
     , (assetName, quantity) <- NE.toList tokenQuantities
     ]
@@ -526,9 +524,9 @@ fromNestedMap = TokenMap . MonoidMap.fromMap . fmap MonoidMap.fromMap
 
 -- | Converts a token map to a flat list.
 --
-toFlatList :: TokenMap -> [(AssetId, TokenQuantity)]
+toFlatList :: TokenMap -> [(W.AssetId, TokenQuantity)]
 toFlatList b =
-    [ (AssetId policyId assetName, quantity)
+    [ (W.AssetId policyId assetName, quantity)
     | (policyId, tokenQuantities) <- toNestedList b
     , (assetName, quantity) <- NE.toList tokenQuantities
     ]
@@ -549,7 +547,7 @@ toNestedMap (TokenMap m) = MonoidMap.toMap <$> MonoidMap.toMap m
 -- Filtering
 --------------------------------------------------------------------------------
 
-filter :: (AssetId -> Bool) -> TokenMap -> TokenMap
+filter :: (W.AssetId -> Bool) -> TokenMap -> TokenMap
 filter f = fromFlatList . L.filter (f . fst) . toFlatList
 
 --------------------------------------------------------------------------------
@@ -636,8 +634,8 @@ isNotEmpty = not . MonoidNull.null
 -- If the given map does not have an entry for the specified asset, this
 -- function returns a value of zero.
 --
-getQuantity :: TokenMap -> AssetId -> TokenQuantity
-getQuantity (TokenMap m) (AssetId policyId assetName) =
+getQuantity :: TokenMap -> W.AssetId -> TokenQuantity
+getQuantity (TokenMap m) (W.AssetId policyId assetName) =
     MonoidMap.get assetName (MonoidMap.get policyId m)
 
 -- | Updates the quantity associated with a given asset.
@@ -645,14 +643,14 @@ getQuantity (TokenMap m) (AssetId policyId assetName) =
 -- If the given quantity is zero, the resultant map will not have an entry for
 -- the given asset.
 --
-setQuantity :: TokenMap -> AssetId -> TokenQuantity -> TokenMap
-setQuantity (TokenMap m) (AssetId policyId assetName) quantity =
+setQuantity :: TokenMap -> W.AssetId -> TokenQuantity -> TokenMap
+setQuantity (TokenMap m) (W.AssetId policyId assetName) quantity =
     TokenMap $ MonoidMap.adjust (MonoidMap.set assetName quantity) policyId m
 
 -- | Returns true if and only if the given map has a non-zero quantity for the
 --   given asset.
 --
-hasQuantity :: TokenMap -> AssetId -> Bool
+hasQuantity :: TokenMap -> W.AssetId -> Bool
 hasQuantity m = not . MonoidNull.null . getQuantity m
 
 -- | Uses the specified function to adjust the quantity associated with a
@@ -663,17 +661,17 @@ hasQuantity m = not . MonoidNull.null . getQuantity m
 --
 adjustQuantity
     :: TokenMap
-    -> AssetId
+    -> W.AssetId
     -> (TokenQuantity -> TokenQuantity)
     -> TokenMap
-adjustQuantity (TokenMap m) (AssetId policyId assetName) f =
+adjustQuantity (TokenMap m) (W.AssetId policyId assetName) f =
     TokenMap $ MonoidMap.adjust (MonoidMap.adjust f assetName) policyId m
 
 -- | Removes the quantity associated with the given asset.
 --
 -- This is equivalent to calling 'setQuantity' with a value of zero.
 --
-removeQuantity :: TokenMap -> AssetId -> TokenMap
+removeQuantity :: TokenMap -> W.AssetId -> TokenMap
 removeQuantity m asset = setQuantity m asset TokenQuantity.zero
 
 -- | Get the largest quantity from this map.
@@ -741,7 +739,7 @@ equipartitionQuantities m count =
   where
     accumulate
         :: NonEmpty TokenMap
-        -> (AssetId, TokenQuantity)
+        -> (W.AssetId, TokenQuantity)
         -> NonEmpty TokenMap
     accumulate maps (asset, quantity) = NE.zipWith (<>) maps $
         singleton asset <$>
@@ -783,14 +781,14 @@ equipartitionQuantitiesWithUpperBound m (TokenQuantity maxQuantity)
 -- Queries
 --------------------------------------------------------------------------------
 
-getAssets :: TokenMap -> Set AssetId
+getAssets :: TokenMap -> Set W.AssetId
 getAssets = Set.fromList . fmap fst . toFlatList
 
 --------------------------------------------------------------------------------
 -- Transformations
 --------------------------------------------------------------------------------
 
-mapAssetIds :: (AssetId -> AssetId) -> TokenMap -> TokenMap
+mapAssetIds :: (W.AssetId -> W.AssetId) -> TokenMap -> TokenMap
 mapAssetIds f m = fromFlatList $ first f <$> toFlatList m
 
 --------------------------------------------------------------------------------
