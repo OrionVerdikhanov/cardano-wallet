@@ -99,9 +99,6 @@ import Cardano.Wallet.Primitive.Types.AssetId
 import Cardano.Wallet.Primitive.Types.AssetName
     ( AssetName
     )
-import Cardano.Wallet.Primitive.Types.TokenPolicyId
-    ( TokenPolicyId
-    )
 import Cardano.Wallet.Primitive.Types.TokenQuantity
     ( TokenQuantity (..)
     )
@@ -200,6 +197,7 @@ import Safe
     ( fromJustNote
     )
 
+import qualified Cardano.Wallet.Primitive.Types.TokenPolicyId as W
 import qualified Cardano.Wallet.Primitive.Types.TokenQuantity as TokenQuantity
 import qualified Data.Aeson as Aeson
 import qualified Data.Foldable as F
@@ -233,7 +231,7 @@ import qualified Data.Set as Set
 --
 newtype TokenMap = TokenMap
     { unTokenMap
-        :: MonoidMap TokenPolicyId (MonoidMap AssetName TokenQuantity)
+        :: MonoidMap W.TokenPolicyId (MonoidMap AssetName TokenQuantity)
     }
     deriving stock (Eq, Generic)
     deriving (Read, Show) via (Quiet TokenMap)
@@ -378,13 +376,13 @@ jsonFailWith :: String -> Parser a
 jsonFailWith s = fail $
     "Error while deserializing token map from JSON: " <> s <> "."
 
-jsonFailWithEmptyTokenList :: TokenPolicyId -> Parser a
+jsonFailWithEmptyTokenList :: W.TokenPolicyId -> Parser a
 jsonFailWithEmptyTokenList policyId = jsonFailWith $ unwords
     [ "Encountered empty token list for policy"
     , show (toText policyId)
     ]
 
-jsonFailWithZeroValueTokenQuantity :: TokenPolicyId -> AssetName -> Parser a
+jsonFailWithZeroValueTokenQuantity :: W.TokenPolicyId -> AssetName -> Parser a
 jsonFailWithZeroValueTokenQuantity policyId assetName = jsonFailWith $ unwords
     [ "Encountered zero-valued quantity for token"
     , show (toText assetName)
@@ -414,7 +412,7 @@ instance FromJSON (Flat TokenMap) where
 
 -- Used for JSON serialization only: not exported.
 data FlatAssetQuantity = FlatAssetQuantity
-    { _policyId :: !TokenPolicyId
+    { _policyId :: !W.TokenPolicyId
     , _assetName :: !AssetName
     , _quantity :: !TokenQuantity
     } deriving Generic
@@ -442,14 +440,14 @@ instance FromJSON (Nested TokenMap) where
 
         parseEntry
             :: NestedMapEntry
-            -> Parser (TokenPolicyId, NonEmpty (AssetName, TokenQuantity))
+            -> Parser (W.TokenPolicyId, NonEmpty (AssetName, TokenQuantity))
         parseEntry (NestedMapEntry policyId mTokens) = do
             tokens <- maybe (jsonFailWithEmptyTokenList policyId) pure $
                 NE.nonEmpty mTokens
             (policyId,) <$> mapM (parseToken policyId) tokens
 
         parseToken
-            :: TokenPolicyId
+            :: W.TokenPolicyId
             -> NestedTokenQuantity
             -> Parser (AssetName, TokenQuantity)
         parseToken policyId (NestedTokenQuantity assetName quantity) = do
@@ -459,7 +457,7 @@ instance FromJSON (Nested TokenMap) where
 
 -- Used for JSON serialization only: not exported.
 data NestedMapEntry = NestedMapEntry
-    { _policyId :: !TokenPolicyId
+    { _policyId :: !W.TokenPolicyId
     , _tokens :: ![NestedTokenQuantity]
     } deriving Generic
 
@@ -512,7 +510,7 @@ fromFlatList = F.foldl' acc empty
 -- its associated quantities will be added together in the resultant map.
 --
 fromNestedList
-    :: [(TokenPolicyId, NonEmpty (AssetName, TokenQuantity))] -> TokenMap
+    :: [(W.TokenPolicyId, NonEmpty (AssetName, TokenQuantity))] -> TokenMap
 fromNestedList entries = fromFlatList
     [ (AssetId policyId assetName, quantity)
     | (policyId, tokenQuantities) <- entries
@@ -521,7 +519,7 @@ fromNestedList entries = fromFlatList
 
 -- | Creates a token map from a nested map.
 --
-fromNestedMap :: Map TokenPolicyId (Map AssetName TokenQuantity) -> TokenMap
+fromNestedMap :: Map W.TokenPolicyId (Map AssetName TokenQuantity) -> TokenMap
 fromNestedMap = TokenMap . MonoidMap.fromMap . fmap MonoidMap.fromMap
 
 --------------------------------------------------------------------------------
@@ -540,13 +538,13 @@ toFlatList b =
 -- | Converts a token map to a nested list.
 --
 toNestedList
-    :: TokenMap -> [(TokenPolicyId, NonEmpty (AssetName, TokenQuantity))]
+    :: TokenMap -> [(W.TokenPolicyId, NonEmpty (AssetName, TokenQuantity))]
 toNestedList (TokenMap m) =
     mapMaybe (traverse (NE.nonEmpty . MonoidMap.toList)) $ MonoidMap.toList m
 
 -- | Converts a token map to a nested map.
 --
-toNestedMap :: TokenMap -> Map TokenPolicyId (Map AssetName TokenQuantity)
+toNestedMap :: TokenMap -> Map W.TokenPolicyId (Map AssetName TokenQuantity)
 toNestedMap (TokenMap m) = MonoidMap.toMap <$> MonoidMap.toMap m
 
 --------------------------------------------------------------------------------
