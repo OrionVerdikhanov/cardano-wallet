@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -226,11 +227,19 @@ import qualified Data.Set as Set
 -- always in its canonical form: we can perform an equality check without
 -- needing any extra canonicalization steps.
 --
-newtype TokenMap = TokenMap
+newtype TokenMapF c = TokenMap
     { unTokenMap
         :: MonoidMap W.TokenPolicyId (MonoidMap W.AssetName TokenQuantity)
     }
     deriving stock Generic
+
+class Context c where
+
+data StandardContext
+
+instance Context StandardContext where
+
+type TokenMap = TokenMapF StandardContext
 
 deriving via Quiet TokenMap instance Read TokenMap
 deriving via Quiet TokenMap instance Show TokenMap
