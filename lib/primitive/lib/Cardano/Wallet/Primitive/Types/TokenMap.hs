@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
@@ -9,6 +10,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 -- | Provides the 'TokenMap' type, which represents a map of named non-ada
 --   token quantities scoped by token policy.
@@ -237,6 +239,8 @@ class Context c where
     type AssetId c
     type AssetName c
     type PolicyId c
+    mkAssetId :: (PolicyId c, AssetName c) -> AssetId c
+    unAssetId :: AssetId c -> (PolicyId c, AssetName c)
 
 data StandardContext
 
@@ -244,6 +248,8 @@ instance Context StandardContext where
     type AssetId StandardContext = W.AssetId
     type AssetName StandardContext = W.AssetName
     type PolicyId StandardContext = W.TokenPolicyId
+    mkAssetId (policyId, assetName) = W.AssetId policyId assetName
+    unAssetId (W.AssetId policyId assetName) = (policyId, assetName)
 
 type TokenMap = TokenMapF StandardContext
 
