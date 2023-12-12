@@ -234,12 +234,14 @@ newtype TokenMapF c = TokenMap
     deriving stock Generic
 
 class Context c where
+    type AssetId c
     type AssetName c
     type PolicyId c
 
 data StandardContext
 
 instance Context StandardContext where
+    type AssetId StandardContext = W.AssetId
     type AssetName StandardContext = W.AssetName
     type PolicyId StandardContext = W.TokenPolicyId
 
