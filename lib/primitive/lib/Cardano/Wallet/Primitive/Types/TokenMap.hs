@@ -4,6 +4,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -229,12 +230,24 @@ newtype TokenMap = TokenMap
     { unTokenMap
         :: MonoidMap W.TokenPolicyId (MonoidMap W.AssetName TokenQuantity)
     }
-    deriving stock (Eq, Generic)
-    deriving (Read, Show) via (Quiet TokenMap)
-    deriving newtype (Commutative, Semigroup, Monoid, MonoidNull)
-    deriving newtype (LeftReductive, RightReductive, Reductive)
-    deriving newtype (LeftGCDMonoid, RightGCDMonoid, GCDMonoid)
-    deriving newtype (OverlappingGCDMonoid, Monus)
+    deriving stock Generic
+
+deriving via Quiet TokenMap instance Read TokenMap
+deriving via Quiet TokenMap instance Show TokenMap
+
+deriving newtype instance Eq                   TokenMap
+deriving newtype instance Semigroup            TokenMap
+deriving newtype instance Commutative          TokenMap
+deriving newtype instance Monoid               TokenMap
+deriving newtype instance MonoidNull           TokenMap
+deriving newtype instance LeftReductive        TokenMap
+deriving newtype instance RightReductive       TokenMap
+deriving newtype instance Reductive            TokenMap
+deriving newtype instance LeftGCDMonoid        TokenMap
+deriving newtype instance RightGCDMonoid       TokenMap
+deriving newtype instance GCDMonoid            TokenMap
+deriving newtype instance OverlappingGCDMonoid TokenMap
+deriving newtype instance Monus                TokenMap
 
 instance NFData TokenMap
 instance Hashable TokenMap where
