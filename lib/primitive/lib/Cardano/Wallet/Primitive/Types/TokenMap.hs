@@ -229,16 +229,18 @@ import qualified Data.Set as Set
 --
 newtype TokenMapF c = TokenMap
     { unTokenMap
-        :: MonoidMap (PolicyId c) (MonoidMap W.AssetName TokenQuantity)
+        :: MonoidMap (PolicyId c) (MonoidMap (AssetName c) TokenQuantity)
     }
     deriving stock Generic
 
 class Context c where
+    type AssetName c
     type PolicyId c
 
 data StandardContext
 
 instance Context StandardContext where
+    type AssetName StandardContext = W.AssetName
     type PolicyId StandardContext = W.TokenPolicyId
 
 type TokenMap = TokenMapF StandardContext
