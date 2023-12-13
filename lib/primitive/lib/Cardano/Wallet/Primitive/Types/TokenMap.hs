@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 -- | Provides the 'TokenMap' type, which represents a map of named non-ada
@@ -522,7 +523,7 @@ instance ToJSON NestedTokenQuantity where
 
 -- | The empty token map.
 --
-empty :: TokenMap
+empty :: Context c => TokenMapF c
 empty = TokenMap mempty
 
 -- | Creates a singleton token map with just one token quantity.
@@ -530,7 +531,7 @@ empty = TokenMap mempty
 -- If the specified token quantity is zero, then the resultant map will be
 -- equal to the 'empty' map.
 --
-singleton :: W.AssetId -> TokenQuantity -> TokenMap
+singleton :: Context c => AssetId c -> TokenQuantity -> TokenMapF c
 singleton = setQuantity empty
 
 -- | Creates a token map from a flat list.
@@ -538,7 +539,7 @@ singleton = setQuantity empty
 -- If an asset name appears more than once in the list under the same policy,
 -- its associated quantities will be added together in the resultant map.
 --
-fromFlatList :: [(W.AssetId, TokenQuantity)] -> TokenMap
+fromFlatList :: Context c => [(AssetId c, TokenQuantity)] -> TokenMapF c
 fromFlatList = F.foldl' acc empty
   where
     acc b (asset, quantity) = adjustQuantity b asset (<> quantity)
@@ -549,16 +550,21 @@ fromFlatList = F.foldl' acc empty
 -- its associated quantities will be added together in the resultant map.
 --
 fromNestedList
-    :: [(W.TokenPolicyId, NonEmpty (W.AssetName, TokenQuantity))] -> TokenMap
+    :: Context c
+    => [(PolicyId c, NonEmpty (AssetName c, TokenQuantity))]
+    -> TokenMapF c
 fromNestedList entries = fromFlatList
-    [ (W.AssetId policyId assetName, quantity)
+    [ (mkAssetId (policyId, assetName), quantity)
     | (policyId, tokenQuantities) <- entries
     , (assetName, quantity) <- NE.toList tokenQuantities
     ]
 
 -- | Creates a token map from a nested map.
 --
-fromNestedMap :: Map W.TokenPolicyId (Map W.AssetName TokenQuantity) -> TokenMap
+fromNestedMap
+    :: Context c
+    => Map (PolicyId c) (Map (AssetName c) TokenQuantity)
+    -> TokenMapF c
 fromNestedMap = TokenMap . MonoidMap.fromMap . fmap MonoidMap.fromMap
 
 --------------------------------------------------------------------------------
@@ -567,9 +573,9 @@ fromNestedMap = TokenMap . MonoidMap.fromMap . fmap MonoidMap.fromMap
 
 -- | Converts a token map to a flat list.
 --
-toFlatList :: TokenMap -> [(W.AssetId, TokenQuantity)]
+toFlatList :: Context c => TokenMapF c -> [(AssetId c, TokenQuantity)]
 toFlatList b =
-    [ (W.AssetId policyId assetName, quantity)
+    [ (mkAssetId (policyId, assetName), quantity)
     | (policyId, tokenQuantities) <- toNestedList b
     , (assetName, quantity) <- NE.toList tokenQuantities
     ]
@@ -577,20 +583,21 @@ toFlatList b =
 -- | Converts a token map to a nested list.
 --
 toNestedList
-    :: TokenMap -> [(W.TokenPolicyId, NonEmpty (W.AssetName, TokenQuantity))]
+    :: TokenMapF c
+    -> [(PolicyId c, NonEmpty (AssetName c, TokenQuantity))]
 toNestedList (TokenMap m) =
     mapMaybe (traverse (NE.nonEmpty . MonoidMap.toList)) $ MonoidMap.toList m
 
 -- | Converts a token map to a nested map.
 --
-toNestedMap :: TokenMap -> Map W.TokenPolicyId (Map W.AssetName TokenQuantity)
+toNestedMap :: TokenMapF c -> Map (PolicyId c) (Map (AssetName c) TokenQuantity)
 toNestedMap (TokenMap m) = MonoidMap.toMap <$> MonoidMap.toMap m
 
 --------------------------------------------------------------------------------
 -- Filtering
 --------------------------------------------------------------------------------
 
-filter :: (W.AssetId -> Bool) -> TokenMap -> TokenMap
+filter :: Context c => (AssetId c -> Bool) -> TokenMapF c -> TokenMapF c
 filter f = fromFlatList . L.filter (f . fst) . toFlatList
 
 --------------------------------------------------------------------------------
@@ -599,7 +606,7 @@ filter f = fromFlatList . L.filter (f . fst) . toFlatList
 
 -- | Adds one token map to another.
 --
-add :: TokenMap -> TokenMap -> TokenMap
+add :: Context c => TokenMapF c -> TokenMapF c -> TokenMapF c
 add = (<>)
 
 -- | Subtracts the second token map from the first.
@@ -607,7 +614,7 @@ add = (<>)
 -- Returns 'Nothing' if the second map is not less than or equal to the first
 -- map when compared with the `leq` function.
 --
-subtract :: TokenMap -> TokenMap -> Maybe TokenMap
+subtract :: Context c => TokenMapF c -> TokenMapF c -> Maybe (TokenMapF c)
 subtract = (</>)
 
 -- | Analogous to @Set.difference@, return the difference between two token
@@ -628,7 +635,7 @@ subtract = (</>)
 -- >>> (mempty `difference` oneToken) `add` oneToken
 -- oneToken
 --
-difference :: TokenMap -> TokenMap -> TokenMap
+difference :: Context c => TokenMapF c -> TokenMapF c -> TokenMapF c
 difference = (<\>)
 
 -- | Computes the intersection of two token maps.
@@ -642,7 +649,7 @@ difference = (<\>)
 -- >>> intersection m1 m2
 --          [          ("b", 2), ("c", 2)          ]
 --
-intersection :: TokenMap -> TokenMap -> TokenMap
+intersection :: Context c => TokenMapF c -> TokenMapF c -> TokenMapF c
 intersection = GCDMonoid.gcd
 
 --------------------------------------------------------------------------------
@@ -651,7 +658,7 @@ intersection = GCDMonoid.gcd
 
 -- | Returns the number of unique assets in a token map.
 --
-size :: TokenMap -> Int
+size :: Context c => TokenMapF c -> Int
 size = Set.size . getAssets
 
 --------------------------------------------------------------------------------
@@ -660,12 +667,12 @@ size = Set.size . getAssets
 
 -- | Returns true if and only if the given map is empty.
 --
-isEmpty :: TokenMap -> Bool
+isEmpty :: Context c => TokenMapF c -> Bool
 isEmpty = MonoidNull.null
 
 -- | Returns true if and only if the given map is not empty.
 --
-isNotEmpty :: TokenMap -> Bool
+isNotEmpty :: Context c => TokenMapF c -> Bool
 isNotEmpty = not . MonoidNull.null
 
 --------------------------------------------------------------------------------
@@ -677,8 +684,8 @@ isNotEmpty = not . MonoidNull.null
 -- If the given map does not have an entry for the specified asset, this
 -- function returns a value of zero.
 --
-getQuantity :: TokenMap -> W.AssetId -> TokenQuantity
-getQuantity (TokenMap m) (W.AssetId policyId assetName) =
+getQuantity :: Context c => TokenMapF c -> AssetId c -> TokenQuantity
+getQuantity (TokenMap m) (unAssetId -> (policyId, assetName)) =
     MonoidMap.get assetName (MonoidMap.get policyId m)
 
 -- | Updates the quantity associated with a given asset.
@@ -686,14 +693,19 @@ getQuantity (TokenMap m) (W.AssetId policyId assetName) =
 -- If the given quantity is zero, the resultant map will not have an entry for
 -- the given asset.
 --
-setQuantity :: TokenMap -> W.AssetId -> TokenQuantity -> TokenMap
-setQuantity (TokenMap m) (W.AssetId policyId assetName) quantity =
+setQuantity
+    :: Context c
+    => TokenMapF c
+    -> AssetId c
+    -> TokenQuantity
+    -> TokenMapF c
+setQuantity (TokenMap m) (unAssetId -> (policyId, assetName)) quantity =
     TokenMap $ MonoidMap.adjust (MonoidMap.set assetName quantity) policyId m
 
 -- | Returns true if and only if the given map has a non-zero quantity for the
 --   given asset.
 --
-hasQuantity :: TokenMap -> W.AssetId -> Bool
+hasQuantity :: Context c => TokenMapF c -> AssetId c -> Bool
 hasQuantity m = not . MonoidNull.null . getQuantity m
 
 -- | Uses the specified function to adjust the quantity associated with a
@@ -703,23 +715,24 @@ hasQuantity m = not . MonoidNull.null . getQuantity m
 -- will not have an entry for the given asset.
 --
 adjustQuantity
-    :: TokenMap
-    -> W.AssetId
+    :: Context c
+    => TokenMapF c
+    -> AssetId c
     -> (TokenQuantity -> TokenQuantity)
-    -> TokenMap
-adjustQuantity (TokenMap m) (W.AssetId policyId assetName) f =
+    -> TokenMapF c
+adjustQuantity (TokenMap m) (unAssetId -> (policyId, assetName)) f =
     TokenMap $ MonoidMap.adjust (MonoidMap.adjust f assetName) policyId m
 
 -- | Removes the quantity associated with the given asset.
 --
 -- This is equivalent to calling 'setQuantity' with a value of zero.
 --
-removeQuantity :: TokenMap -> W.AssetId -> TokenMap
+removeQuantity :: Context c => TokenMapF c -> AssetId c -> TokenMapF c
 removeQuantity m asset = setQuantity m asset TokenQuantity.zero
 
 -- | Get the largest quantity from this map.
 --
-maximumQuantity :: TokenMap -> TokenQuantity
+maximumQuantity :: TokenMapF c -> TokenQuantity
 maximumQuantity = F.foldl' (F.foldl' max) mempty . unTokenMap
 
 --------------------------------------------------------------------------------
@@ -735,11 +748,12 @@ maximumQuantity = F.foldl' (F.foldl' max) mempty . unTokenMap
 -- The quantities of each asset are unchanged.
 --
 equipartitionAssets
-    :: TokenMap
+    :: Context c
+    => TokenMapF c
     -- ^ The token map to be partitioned.
     -> NonEmpty a
     -- ^ Represents the number of portions in which to partition the token map.
-    -> NonEmpty TokenMap
+    -> NonEmpty (TokenMapF c)
     -- ^ The partitioned maps.
 equipartitionAssets m mapCount =
     fromFlatList <$> NE.unfoldr generateChunk (assetCounts, toFlatList m)
@@ -771,19 +785,21 @@ equipartitionAssets m mapCount =
 -- with the 'leq' function.
 --
 equipartitionQuantities
-    :: TokenMap
+    :: Context c
+    => TokenMapF c
     -- ^ The map to be partitioned.
     -> NonEmpty a
     -- ^ Represents the number of portions in which to partition the map.
-    -> NonEmpty TokenMap
+    -> NonEmpty (TokenMapF c)
     -- ^ The partitioned maps.
 equipartitionQuantities m count =
     F.foldl' accumulate (empty <$ count) (toFlatList m)
   where
     accumulate
-        :: NonEmpty TokenMap
-        -> (W.AssetId, TokenQuantity)
-        -> NonEmpty TokenMap
+        :: Context c
+        => NonEmpty (TokenMapF c)
+        -> (AssetId c, TokenQuantity)
+        -> NonEmpty (TokenMapF c)
     accumulate maps (asset, quantity) = NE.zipWith (<>) maps $
         singleton asset <$>
             TokenQuantity.equipartition quantity count
@@ -797,10 +813,11 @@ equipartitionQuantities m count =
 -- exceeds the maximum allowable token quantity.
 --
 equipartitionQuantitiesWithUpperBound
-    :: TokenMap
+    :: Context c
+    => TokenMapF c
     -> TokenQuantity
     -- ^ Maximum allowable token quantity.
-    -> NonEmpty TokenMap
+    -> NonEmpty (TokenMapF c)
     -- ^ The partitioned maps.
 equipartitionQuantitiesWithUpperBound m (TokenQuantity maxQuantity)
     | maxQuantity == 0 =
@@ -824,14 +841,18 @@ equipartitionQuantitiesWithUpperBound m (TokenQuantity maxQuantity)
 -- Queries
 --------------------------------------------------------------------------------
 
-getAssets :: TokenMap -> Set W.AssetId
+getAssets :: Context c => TokenMapF c -> Set (AssetId c)
 getAssets = Set.fromList . fmap fst . toFlatList
 
 --------------------------------------------------------------------------------
 -- Transformations
 --------------------------------------------------------------------------------
 
-mapAssetIds :: (W.AssetId -> W.AssetId) -> TokenMap -> TokenMap
+mapAssetIds
+    :: Context c
+    => (AssetId c -> AssetId c)
+    -> TokenMapF c
+    -> TokenMapF c
 mapAssetIds f m = fromFlatList $ first f <$> toFlatList m
 
 --------------------------------------------------------------------------------
@@ -845,5 +866,5 @@ mapAssetIds f m = fromFlatList $ first f <$> toFlatList m
 --
 -- Throws a run-time exception if the pre-condition is violated.
 --
-unsafeSubtract :: TokenMap -> TokenMap -> TokenMap
+unsafeSubtract :: Context c => TokenMapF c -> TokenMapF c -> TokenMapF c
 unsafeSubtract b1 b2 = fromJustNote "TokenMap.unsafeSubtract" $ b1 </> b2
