@@ -343,7 +343,7 @@ instance Context c => PartialOrd (TokenMapF c) where
 newtype Lexicographic a = Lexicographic {unLexicographic :: a}
     deriving (Eq, Show)
 
-instance Ord (Lexicographic TokenMap) where
+instance Context c => Ord (Lexicographic (TokenMapF c)) where
     compare = comparing (toNestedList . unLexicographic)
 
 --------------------------------------------------------------------------------
