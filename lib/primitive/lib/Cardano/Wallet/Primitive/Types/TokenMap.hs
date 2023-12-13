@@ -1,7 +1,9 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -234,12 +236,20 @@ newtype TokenMapF c = TokenMap
     }
     deriving stock Generic
 
-class Context c where
+class
+    ( ContextType (AssetId c)
+    , ContextType (AssetName c)
+    , ContextType (PolicyId c)
+    ) =>
+    Context c
+  where
     type AssetId c = assetId | assetId -> c
     type AssetName c
     type PolicyId c
     mkAssetId :: (PolicyId c, AssetName c) -> AssetId c
     unAssetId :: AssetId c -> (PolicyId c, AssetName c)
+
+type ContextType a = (Buildable a, Hashable a, NFData a, Ord a, Read a, Show a)
 
 data StandardContext
 
