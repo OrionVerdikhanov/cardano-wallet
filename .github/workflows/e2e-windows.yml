@@ -23,7 +23,6 @@ jobs:
       BRANCH: ${{ github.event.inputs.branch || 'master' }}
       TAGS: ${{ github.event.inputs.tags || 'all' }}
 
-
     steps:
     - name: Check space
       run: Get-PSDrive
