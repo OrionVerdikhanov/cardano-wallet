@@ -381,6 +381,7 @@ prop_fromNestedList assetQuantities = checkCoverage $ property $
     F.all (\(a, q) -> TokenMap.getQuantity tokenMap a == q)
         combinedAssetQuantities
   where
+    tokenMap :: TokenMap
     tokenMap = TokenMap.fromNestedList assetQuantities
     combinedAssetQuantities = Map.toList $
         Map.fromListWith TokenQuantity.add flattenedAssetQuantities
@@ -392,7 +393,7 @@ prop_fromNestedList assetQuantities = checkCoverage $ property $
 
 prop_empty_toFlatList :: Property
 prop_empty_toFlatList =
-    TokenMap.toFlatList TokenMap.empty === []
+    TokenMap.toFlatList (TokenMap.empty :: TokenMap) === []
 
 prop_singleton_toFlatList
     :: (AssetId, TokenQuantity) -> Property
@@ -489,7 +490,8 @@ prop_maximumQuantity_all b =
     maxQ = TokenMap.maximumQuantity b
 
 prop_maximumQuantity_mempty :: Property
-prop_maximumQuantity_mempty = TokenMap.maximumQuantity mempty === mempty
+prop_maximumQuantity_mempty =
+    TokenMap.maximumQuantity (mempty :: TokenMap) === mempty
 
 --------------------------------------------------------------------------------
 -- Queries
