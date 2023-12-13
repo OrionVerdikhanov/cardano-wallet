@@ -335,7 +335,7 @@ instance
 --
 -- In the above example, map 'x' is strictly less than map 'y'.
 --
-instance PartialOrd TokenMap where
+instance Context c => PartialOrd (TokenMapF c) where
     leq = MonoidMap.isSubmapOf `on` unTokenMap
 
 -- | Defines a lexicographic ordering.
