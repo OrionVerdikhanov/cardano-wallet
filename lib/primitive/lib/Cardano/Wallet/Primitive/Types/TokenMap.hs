@@ -370,12 +370,13 @@ newtype Nested a = Nested { getNested :: a }
 -- Text serialization
 --------------------------------------------------------------------------------
 
-instance Buildable (Flat TokenMap) where
+instance Context c => Buildable (Flat (TokenMapF c)) where
     build = buildTokenMap . getFlat
       where
         buildTokenMap =
             buildList buildAssetQuantity . toFlatList
-        buildAssetQuantity (W.AssetId policyId assetName, quantity) = buildMap
+        buildAssetQuantity (unAssetId -> (policyId, assetName), quantity) =
+            buildMap
             [ ("policyId",
                 build policyId)
             , ("assetName",
@@ -384,7 +385,8 @@ instance Buildable (Flat TokenMap) where
                 build quantity)
             ]
 
-instance Buildable (Nested TokenMap) where
+instance Context c => Buildable (Nested (TokenMapF c))
+  where
     build = buildTokenMap . unTokenMap . getNested
       where
         buildTokenMap =
