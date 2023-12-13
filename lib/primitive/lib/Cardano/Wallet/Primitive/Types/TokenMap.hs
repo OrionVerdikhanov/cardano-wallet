@@ -262,22 +262,22 @@ instance Context StandardContext where
 
 type TokenMap = TokenMapF StandardContext
 
-deriving via Quiet TokenMap instance Read TokenMap
-deriving via Quiet TokenMap instance Show TokenMap
+deriving via Quiet (TokenMapF c) instance Context c => Read (TokenMapF c)
+deriving via Quiet (TokenMapF c) instance Context c => Show (TokenMapF c)
 
-deriving newtype instance Eq                   TokenMap
-deriving newtype instance Semigroup            TokenMap
-deriving newtype instance Commutative          TokenMap
-deriving newtype instance Monoid               TokenMap
-deriving newtype instance MonoidNull           TokenMap
-deriving newtype instance LeftReductive        TokenMap
-deriving newtype instance RightReductive       TokenMap
-deriving newtype instance Reductive            TokenMap
-deriving newtype instance LeftGCDMonoid        TokenMap
-deriving newtype instance RightGCDMonoid       TokenMap
-deriving newtype instance GCDMonoid            TokenMap
-deriving newtype instance OverlappingGCDMonoid TokenMap
-deriving newtype instance Monus                TokenMap
+deriving newtype instance Context c => Eq                   (TokenMapF c)
+deriving newtype instance Context c => Semigroup            (TokenMapF c)
+deriving newtype instance Context c => Commutative          (TokenMapF c)
+deriving newtype instance Context c => Monoid               (TokenMapF c)
+deriving newtype instance Context c => MonoidNull           (TokenMapF c)
+deriving newtype instance Context c => LeftReductive        (TokenMapF c)
+deriving newtype instance Context c => RightReductive       (TokenMapF c)
+deriving newtype instance Context c => Reductive            (TokenMapF c)
+deriving newtype instance Context c => LeftGCDMonoid        (TokenMapF c)
+deriving newtype instance Context c => RightGCDMonoid       (TokenMapF c)
+deriving newtype instance Context c => GCDMonoid            (TokenMapF c)
+deriving newtype instance Context c => OverlappingGCDMonoid (TokenMapF c)
+deriving newtype instance Context c => Monus                (TokenMapF c)
 
 instance NFData TokenMap
 instance Hashable TokenMap where
