@@ -151,7 +151,10 @@ steps:
       TMPDIR: "/cache"
 
   - block: "macOS steps"
-    if: '(build.branch !~ /^gh-readonly-queue\/master/) && (build.branch != "master") && (build.branch !~ /^release-candidate/)'
+    if: '(build.branch !~ /^gh-readonly-queue\/master/)
+          && (build.branch != "master")
+          && (build.branch !~ /^release-candidate/)
+          && (build.branch != "rc-latest")'
     depends_on: linux-nix
     key: trigger-macos
 
@@ -180,7 +183,10 @@ steps:
 
   - block: "Build package (linux)"
     depends_on: linux-nix
-    if: '(build.branch !~ /^gh-readonly-queue\/master/) && (build.branch != "master") && (build.branch !~ /^release-candidate/)'
+    if: '(build.branch !~ /^gh-readonly-queue\/master/)
+        && (build.branch != "master")
+        && (build.branch !~ /^release-candidate/)
+        && (build.branch != "rc-latest")'
     key: trigger-build-linux-package
 
   - label: 'Build package (linux)'
@@ -195,7 +201,10 @@ steps:
 
   - block: "Build windows artifacts"
     depends_on: linux-nix
-    if: '(build.branch !~ /^gh-readonly-queue\/master/) && (build.branch != "master") && (build.branch !~ /^release-candidate/)'
+    if: '(build.branch !~ /^gh-readonly-queue\/master/)
+        && (build.branch != "master")
+        && (build.branch !~ /^release-candidate/)
+        && (build.branch != "rc-latest")'
     key: trigger-build-windows-artifacts
 
   - label: 'Build package (windows)'
@@ -219,7 +228,10 @@ steps:
       TMPDIR: "/cache"
 
   - block: "Run E2E tests"
-    if: '(build.branch !~ /^gh-readonly-queue\/master/) && (build.branch != "master") && (build.branch !~ /^release-candidate/)'
+    if: '(build.branch !~ /^gh-readonly-queue\/master/)
+        && (build.branch != "master")
+        && (build.branch !~ /^release-candidate/)
+        && (build.branch != "rc-latest")'
     depends_on: linux-nix
     key: trigger-e2e-tests
 
