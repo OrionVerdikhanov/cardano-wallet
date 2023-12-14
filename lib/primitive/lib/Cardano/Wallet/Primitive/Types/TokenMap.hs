@@ -280,7 +280,7 @@ deriving newtype instance Context c => GCDMonoid            (TokenMapF c)
 deriving newtype instance Context c => OverlappingGCDMonoid (TokenMapF c)
 deriving newtype instance Context c => Monus                (TokenMapF c)
 
-instance NFData TokenMap
+deriving instance Context c => NFData (TokenMapF c)
 instance Hashable TokenMap where
     hashWithSalt = hashUsing toNestedList
 
