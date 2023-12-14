@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 
@@ -15,6 +16,9 @@ import Cardano.Wallet.Primitive.Types.TokenPolicyId
     )
 import Control.DeepSeq
     ( NFData
+    )
+import Data.Hashable
+    ( Hashable (..)
     )
 import Fmt
     ( Buildable
@@ -35,5 +39,4 @@ data AssetId = AssetId
     }
     deriving stock (Eq, Generic, Ord, Read, Show)
     deriving Buildable via GenericBuildable AssetId
-
-instance NFData AssetId
+    deriving anyclass (Hashable, NFData)
