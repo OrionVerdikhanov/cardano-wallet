@@ -1,27 +1,53 @@
 name: RC git tag update
 on:
+
   workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Bump version'
+        required: true
+
 
 jobs:
-  build:
+  release:
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.2.0
-      - run: |
-            # retag old rc tag
-            old=$(git rev-list -n 1 rc-latest)
-            if [ $? -eq 0 ]; then
-                date=$(git show -s --format=%ci rc | awk '{print $1}')
-                git tag --delete rc-latest
-                git push origin --delete rc-latest
-                git tag rc-$date $old
-                git push origin rc-$date
-            else
-                echo "RC tagging starts from scratch"
-            fi
-            # tag new rc-latest
-            id=$(curl -X GET -H "Authorization: Bearer ${BUILDKITE_API_TOKEN}" \
-                "https://api.buildkite.com/v2/organizations/cardano-foundation/pipelines/cardano-wallet/builds" \
-                | jq -r '[.[] | select(.state == "passed" and .branch == "master") | .commit][0]')
-            git tag rc-latest $id
-            git push origin rc-latest
+      # This should create an empty release draft
+      # TODO: get artifacts from Buildkite to be attached to the draft
+      # Task: https://cardanofoundation.atlassian.net/browse/ADP-2502
+      - name: '🚀 Release'
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          # fail_on_unmatched_files: true
+          # files: |
+          #   *.tar.gz
+          #   *.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bump_sh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '📥 Checkout repository'
+        uses: actions/checkout@v4.1.1
+
+
+      - name: 'Install dependencies'
+        run: |
+          sudo npm install -g bump-cli
+          sudo snap install jq
+          sudo snap install yq
+
+      - name: 'Update Release in Bump.sh'
+        run: './scripts/gh/update-bump.sh'
+        env:
+          BUMP_SH_DOC_ID: ${{ secrets.BUMP_SH_DOC_ID }}
+          BUMP_SH_TOKEN: ${{ secrets.BUMP_SH_TOKEN }}
+          WALLET_VERSION:
+      - uses: cachix/install-nix-action@v13
+        with:
+          nix_path: nixpkgs=channel:nixpkgs-21.11-darwin
+      - name: 'Show latest changes from Bump.sh'
+        run: './scripts/gh/show-bump.sh'

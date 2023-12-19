@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Needs yq version 4 and the bump-cli ruby gem
+# Needs yq , jq and bump-cli
 
 set -euo pipefail
 
@@ -8,11 +8,8 @@ if [ -z "${BUMP_SH_DOC_ID:-}" ] || [ -z "${BUMP_SH_TOKEN:-}" ]; then
   exit 1
 fi
 
-bump_swagger() {
-  bump "$1" --doc "$BUMP_SH_DOC_ID" --token "$BUMP_SH_TOKEN" specifications/api/swagger.json
-}
+JSON_SWAGGER=$(mktemp)
 
-yq eval specifications/api/swagger.yaml -j > specifications/api/swagger.json
+cat specifications/api/swagger.yaml | yq . -o=json | jq -r tostring > $JSON_SWAGGER
 
-bump_swagger validate
-bump_swagger deploy
+bump deploy --doc "$BUMP_SH_DOC_ID" --token "$BUMP_SH_TOKEN" $JSON_SWAGGER
