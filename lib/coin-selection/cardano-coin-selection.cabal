@@ -85,7 +85,6 @@ test-suite test
     , cardano-wallet-primitive
     , cardano-wallet-test-utils
     , containers
-    , fmt
     , generic-lens
     , generics-sop
     , hspec
