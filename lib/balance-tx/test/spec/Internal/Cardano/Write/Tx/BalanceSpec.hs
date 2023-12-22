@@ -403,6 +403,7 @@ import Test.Utils.Paths
     )
 import Test.Utils.Pretty
     ( Pretty (..)
+    , showPretty
     )
 import Text.Read
     ( readMaybe
@@ -1444,8 +1445,8 @@ prop_balanceTransactionValid
                  (ErrUnderestimatedFee delta candidateTx nWits)) ->
                 let counterexampleText = unlines
                         [ "underestimated fee by "
-                            <> pretty (Convert.toWalletCoin delta)
-                        , "candidate tx: " <> show (Pretty candidateTx)
+                            <> showPretty (Convert.toWalletCoin delta)
+                        , "candidate tx: " <> showPretty candidateTx
                         , "assuming key witness count: " <> show nWits
                         ]
                 in
