@@ -323,6 +323,9 @@ import Test.Utils.Laws
 import Test.Utils.Pretty
     ( Pretty (..)
     )
+import Text.Pretty.Simple
+    ( pShow
+    )
 
 import qualified Cardano.CoinSelection.Context as SC
 import qualified Cardano.CoinSelection.UTxOIndex as UTxOIndex
@@ -337,6 +340,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
+import qualified Data.Text.Lazy as TL
 
 spec :: Spec
 spec = describe "Cardano.CoinSelection.BalanceSpec" $
@@ -4313,6 +4317,9 @@ mockAsset a = AssetId (UnsafeTokenPolicyId $ Hash a) (UnsafeAssetName "1")
 
 mockAssetQuantity :: ByteString -> Natural -> (AssetId, TokenQuantity)
 mockAssetQuantity a q = (mockAsset a, TokenQuantity q)
+
+pp :: Show a => a -> String
+pp = TL.unpack . pShow
 
 unitTests :: String -> [Expectation] -> SpecWith ()
 unitTests lbl cases =
