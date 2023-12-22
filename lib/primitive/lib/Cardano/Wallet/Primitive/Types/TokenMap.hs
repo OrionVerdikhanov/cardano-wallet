@@ -163,6 +163,7 @@ import Fmt
     , Builder
     , blockListF'
     , blockMapF
+    , genericF
     )
 import GHC.Generics
     ( Generic
@@ -307,18 +308,7 @@ newtype Nested a = Nested { getNested :: a }
 --------------------------------------------------------------------------------
 
 instance Buildable (Flat TokenMap) where
-    build = buildTokenMap . getFlat
-      where
-        buildTokenMap =
-            buildList buildAssetQuantity . toFlatList
-        buildAssetQuantity (AssetId policyId assetName, quantity) = buildMap
-            [ ("policyId",
-                build policyId)
-            , ("assetName",
-                build assetName)
-            , ("quantity",
-                build quantity)
-            ]
+    build = genericF . toFlatList . getFlat
 
 instance Buildable (Nested TokenMap) where
     build = buildTokenMap . unTokenMap . getNested
