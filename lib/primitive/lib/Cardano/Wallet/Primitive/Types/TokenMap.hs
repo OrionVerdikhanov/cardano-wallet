@@ -160,9 +160,6 @@ import Data.Set
     )
 import Fmt
     ( Buildable (..)
-    , Builder
-    , blockListF'
-    , blockMapF
     , genericF
     )
 import GHC.Generics
@@ -311,28 +308,7 @@ instance Buildable (Flat TokenMap) where
     build = genericF . toFlatList . getFlat
 
 instance Buildable (Nested TokenMap) where
-    build = buildTokenMap . unTokenMap . getNested
-      where
-        buildTokenMap =
-            buildList buildPolicy . MonoidMap.toList
-        buildPolicy (policyId, assetMap) = buildMap
-            [ ("policyId",
-                build policyId)
-            , ("tokens",
-                buildList buildTokenQuantity (MonoidMap.toList assetMap))
-            ]
-        buildTokenQuantity (assetName, quantity) = buildMap
-            [ ("assetName",
-                build assetName)
-            , ("quantity",
-                build quantity)
-            ]
-
-buildList :: Foldable f => (a -> Builder) -> f a -> Builder
-buildList = blockListF' "-"
-
-buildMap :: [(String, Builder)] -> Builder
-buildMap = blockMapF . fmap (first $ id @String)
+    build = genericF . toNestedList . getNested
 
 --------------------------------------------------------------------------------
 -- Construction
