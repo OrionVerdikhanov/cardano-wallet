@@ -86,7 +86,6 @@ import Control.DeepSeq
     )
 import Data.Bifunctor
     ( bimap
-    , first
     )
 import Data.Delta
     ( Delta (..)
@@ -103,11 +102,6 @@ import Data.Map.Strict
     )
 import Data.Set
     ( Set
-    )
-import Fmt
-    ( Buildable (..)
-    , blockListF'
-    , blockMapF
     )
 import GHC.Generics
     ( Generic
@@ -127,18 +121,6 @@ newtype UTxO = UTxO { unUTxO :: Map TxIn TxOut }
     deriving newtype (Semigroup, Monoid)
 
 instance NFData UTxO
-
-instance Buildable UTxO where
-    build (UTxO utxo) =
-        blockListF' "-" utxoF (Map.toList utxo)
-      where
-        utxoF (inp, out) = buildMap
-            [ ("input"
-              , build inp)
-            , ("output"
-              , build out)
-            ]
-        buildMap = blockMapF . fmap (first $ id @String)
 
 -- | Domain of a 'UTxO' = the set of /inputs/ of the /utxo/.
 dom :: UTxO -> Set TxIn

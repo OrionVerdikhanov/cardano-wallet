@@ -2035,7 +2035,7 @@ newtype TxBalanceSurplus a = TxBalanceSurplus {unTxBalanceSurplus :: a}
     deriving (Eq, Show)
 
 data Wallet = Wallet UTxOAssumptions W.UTxO AnyChangeAddressGenWithState
-    deriving Show via (ShowBuildable Wallet)
+    deriving Show
 
 --------------------------------------------------------------------------------
 -- Utility functions
@@ -2873,63 +2873,6 @@ shrinkWdrl (Withdrawals m) = map (Withdrawals . Map.fromList) $
         [ (acc, Ledger.Coin c')
         | c' <- filter (>= 1) $ shrink c
         ]
-
---------------------------------------------------------------------------------
--- Pretty-printing
---------------------------------------------------------------------------------
-
--- | A convenient wrapper type that allows values of any type with a 'Buildable'
---   instance to be pretty-printed through the 'Show' interface.
---
-newtype ShowBuildable a = ShowBuildable a
-    deriving newtype Arbitrary
-
-instance Buildable a => Show (ShowBuildable a) where
-    show (ShowBuildable x) = pretty x
-
-instance Buildable UTxOAssumptions where
-    build = \case
-        AllKeyPaymentCredentials -> "AllKeyPaymentCredentials"
-        AllByronKeyPaymentCredentials -> "AllByronKeyPaymentCredentials"
-        AllScriptPaymentCredentialsFrom scriptTemplate _scriptLookup ->
-            nameF "AllScriptPaymentCredentialsFrom" $
-                blockListF [ nameF "scriptTemplate" $ build scriptTemplate ]
-
-instance Buildable AnyChangeAddressGenWithState where
-    build (AnyChangeAddressGenWithState (ChangeAddressGen g maxLengthAddr) s0) =
-        blockListF
-            [ nameF "changeAddr0" $
-                build $ show $ fst $ g s0
-            , nameF "max address length" $
-                build $ BS.length $ serialiseAddr maxLengthAddr
-            ]
-
--- CSV with the columns: wallet_balance,(fee,minfee | error)
-instance Buildable BalanceTxGolden where
-    build (BalanceTxGoldenFailure c err) = mconcat
-        [ build c
-        , ","
-        , build (T.pack err)
-        ]
-    build (BalanceTxGoldenSuccess c fee minfee) = mconcat
-        [ build c
-        , ","
-        , lovelaceF fee
-        , ","
-        , lovelaceF minfee
-        ]
-      where
-        lovelaceF (Coin l)
-            | l < 0     = "-" <> pretty (W.Coin.unsafeFromIntegral (-l))
-            | otherwise = pretty (W.Coin.unsafeFromIntegral l)
-
-instance Buildable Wallet where
-    build (Wallet assumptions utxo changeAddressGen) =
-        nameF "Wallet" $ mconcat
-            [ nameF "assumptions" $ build assumptions
-            , nameF "changeAddressGen" $ build changeAddressGen
-            , nameF "utxo" $ pretty utxo
-            ]
 
 --------------------------------------------------------------------------------
 -- Miscellaneous orphan instances
