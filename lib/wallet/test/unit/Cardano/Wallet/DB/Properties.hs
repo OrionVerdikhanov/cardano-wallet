@@ -97,10 +97,6 @@ import Data.Maybe
     ( isNothing
     , mapMaybe
     )
-import Fmt
-    ( Buildable
-    , pretty
-    )
 import Test.Hspec
     ( SpecWith
     , describe
@@ -123,6 +119,9 @@ import Test.QuickCheck.Monadic
     , monitor
     , pick
     , run
+    )
+import Test.Utils.Pretty
+    ( showPretty
     )
 
 import qualified Cardano.Wallet.Primitive.Types.Range as Range
@@ -270,7 +269,7 @@ assertWith lbl condition = do
 
 -- | Checks that a given resource can be read after having been inserted in DB.
 prop_readAfterPut
-    :: (Buildable (f a), Eq (f a), Applicative f)
+    :: (Show (f a), Eq (f a), Applicative f)
     => TestOnLayer s
     -> ( DBLayer IO s
          -> WalletId
@@ -290,8 +289,8 @@ prop_readAfterPut test putOp readOp a = test $ \db wid -> do
     run $ unsafeRunExceptT $ putOp db wid a
     res <- run $ readOp db wid
     let fa = pure a
-    monitor $ counterexample $ "\nInserted\n" <> pretty fa
-    monitor $ counterexample $ "\nRead\n" <> pretty res
+    monitor $ counterexample $ "\nInserted\n" <> showPretty fa
+    monitor $ counterexample $ "\nRead\n" <> showPretty res
     assertWith "Inserted == Read" (res == fa)
 
 prop_getTxAfterPutValidTxId
@@ -307,15 +306,15 @@ prop_getTxAfterPutValidTxId test txGen = test $ \DBLayer {..} _ -> do
         monitor
             $ counterexample
             $ "\nInserted\n"
-                <> pretty txMeta
+                <> showPretty txMeta
                 <> " for txId: "
-                <> pretty txId
+                <> showPretty txId
         monitor
             $ counterexample
             $ "\nRead\n"
-                <> pretty txInfoMeta
+                <> showPretty txInfoMeta
                 <> " for txId: "
-                <> pretty txInfoId
+                <> showPretty txInfoId
         assertWith
             "Inserted is included in Read"
             (txMeta == txInfoMeta && txId == txInfoId)
@@ -335,7 +334,7 @@ prop_getTxAfterPutInvalidTxId test txGen txId' = test $ \DBLayer {..} _ -> do
 
 -- | Check that the DB supports multiple sequential puts for a given resource
 prop_sequentialPut
-    :: (Buildable (f a), Eq (f a))
+    :: (Show (f a), Eq (f a))
     => TestOnLayer s
     -> ( DBLayer IO s
          -> WalletId
@@ -350,18 +349,17 @@ prop_sequentialPut
     -- ^ Read Operation
     -> ([a] -> f a)
     -- ^ How do we expect operations to resolve
-    -> [ShowFmt a]
+    -> [a]
     -- ^ Property arguments
     -> Property
 prop_sequentialPut _ _ _ _ [] = property True
-prop_sequentialPut test putOp readOp resolve as =
+prop_sequentialPut test putOp readOp resolve ops =
     test $ \db wid -> do
-        let ops = unShowFmt <$> as
         run $ unsafeRunExceptT $ forM_ ops $ putOp db wid
         res <- run $ readOp db wid
         let resolved = resolve ops
-        monitor $ counterexample $ "\nResolved\n" <> pretty resolved
-        monitor $ counterexample $ "\nRead\n" <> pretty res
+        monitor $ counterexample $ "\nResolved\n" <> showPretty resolved
+        monitor $ counterexample $ "\nRead\n" <> showPretty res
         assertWith "Resolved == Read" (res == resolved)
 
 -- | Re-schedule pending transaction on rollback, i.e.:
@@ -408,7 +406,7 @@ prop_rollbackTxHistory test (InitialCheckpoint cp0) (GenTxHistory txs0) =
                 pure (point, txs)
 
             monitor $ counterexample
-                $ "\n" <> "Actual Rollback Point:\n" <> (pretty point)
+                $ "\n" <> "Actual Rollback Point:\n" <> (showPretty point)
             monitor $ counterexample
                 $ "\nOriginal tx history:\n" <> (txsF txs0)
             monitor $ counterexample
@@ -427,11 +425,11 @@ prop_rollbackTxHistory test (InitialCheckpoint cp0) (GenTxHistory txs0) =
                 ( \(tx, meta) ->
                     unwords
                         [ "- "
-                        , pretty (txId tx)
-                        , pretty (meta ^. #slotNo)
-                        , pretty (meta ^. #status)
-                        , pretty (meta ^. #direction)
-                        , pretty (meta ^. #amount)
+                        , showPretty (txId tx)
+                        , showPretty (meta ^. #slotNo)
+                        , showPretty (meta ^. #status)
+                        , showPretty (meta ^. #direction)
+                        , showPretty (meta ^. #amount)
                         ]
                 )
 

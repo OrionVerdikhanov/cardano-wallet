@@ -273,9 +273,6 @@ import Data.TreeDiff
     , defaultExprViaShow
     , genericToExpr
     )
-import Fmt
-    ( Buildable
-    )
 import GHC.Generics
     ( Generic
     , Generic1
@@ -1038,7 +1035,6 @@ testWid = unMockWid testMWid
 genDBParams
     :: ( AddressBookIso s
        , Arbitrary s
-       , Buildable s
        , Eq s
        , IsOurs s Address
        , IsOurs s RewardAccount

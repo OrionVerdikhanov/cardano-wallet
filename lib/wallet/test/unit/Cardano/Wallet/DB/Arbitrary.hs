@@ -237,9 +237,6 @@ import Data.ByteArray.Encoding
 import Data.Either.Extra
     ( fromRight'
     )
-import Data.Functor.Identity
-    ( Identity (..)
-    )
 import Data.Generics.Internal.VL
     ( match
     )
@@ -263,9 +260,6 @@ import Data.Quantity
 import Data.Ratio
     ( (%)
     )
-import Data.Text.Class
-    ( toText
-    )
 import Data.Typeable
     ( Typeable
     )
@@ -275,14 +269,6 @@ import Data.Word
     )
 import Data.Word.Odd
     ( Word31
-    )
-import Fmt
-    ( Buildable (..)
-    , Builder
-    , blockListF'
-    , prefixF
-    , suffixF
-    , tupleF
     )
 import Generics.SOP
     ( NP (..)
@@ -354,7 +340,6 @@ import qualified Data.Map.Strict as Map
 type GenState s =
     ( AddressBookIso s
     , Arbitrary s
-    , Buildable s
     , Eq s
     , IsOurs s Address
     , IsOurs s RewardAccount
@@ -376,7 +361,7 @@ newtype MockChain = MockChain
 -- | Generate arbitrary checkpoints, but that always have their tip at 0 0.
 newtype InitialCheckpoint s =
     InitialCheckpoint { getInitialCheckpoint :: Wallet s }
-    deriving newtype (Show, Eq, Buildable, NFData)
+    deriving newtype (Show, Eq, NFData)
 
 instance (Arbitrary k, Ord k, Arbitrary v) => Arbitrary (KeyValPairs k v) where
     shrink = genericShrink
@@ -933,21 +918,3 @@ instance Arbitrary TxScriptValidity where
 instance Arbitrary ChangeAddressMode where
     arbitrary = genericArbitrary
     shrink = genericShrink
-
-{-------------------------------------------------------------------------------
-                                   Buildable
--------------------------------------------------------------------------------}
-
-deriving instance Buildable a => Buildable (Identity a)
-
-instance Buildable GenTxHistory where
-    build (GenTxHistory txs) = blockListF' "-" tupleF txs
-
-instance Buildable (ShelleyKey depth XPrv, PassphraseHash) where
-    build (_, h) = tupleF (xprvF, prefixF 8 hF <> "..." <> suffixF 8 hF)
-      where
-        xprvF = "XPrv" :: Builder
-        hF = build (toText (Hash @"BlockHeader" (BA.convert h)))
-
-instance Buildable MockChain where
-    build (MockChain chain) = blockListF' mempty build chain

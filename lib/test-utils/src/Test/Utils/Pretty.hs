@@ -4,6 +4,7 @@ module Test.Utils.Pretty
     ( Pretty (..)
     , (====)
     , pShowBuilder
+    , showPretty
     ) where
 
 import Prelude
@@ -53,3 +54,6 @@ pShowBuilder = fromLazyText . pShow
 infix 4 ====
 (====) :: (Eq a, Show a) => a -> a -> Property
 a ==== b = Pretty a === Pretty b
+
+showPretty :: Show a => a -> String
+showPretty = TL.unpack . pShow
