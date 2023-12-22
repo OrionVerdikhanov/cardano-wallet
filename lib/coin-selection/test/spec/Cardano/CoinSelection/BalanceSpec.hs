@@ -234,7 +234,6 @@ import Data.Word
     )
 import Fmt
     ( Buildable (..)
-    , blockListF
     )
 import Generics.SOP
     ( NP (..)
@@ -3034,7 +3033,7 @@ prop_makeChange_fail_minValueTooBig p =
           where
             counterexampleText = unlines
                 [ "change:"
-                , pp (blockListF (Flat <$> change))
+                , pp (Flat <$> change)
                 , "delta:"
                 , pp deltaCoin
                 , "totalMinCoinDeposit:"
