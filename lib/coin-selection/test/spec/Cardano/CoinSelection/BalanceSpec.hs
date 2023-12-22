@@ -154,8 +154,7 @@ import Cardano.Wallet.Primitive.Types.Hash
     ( Hash (..)
     )
 import Cardano.Wallet.Primitive.Types.TokenBundle
-    ( Flat (..)
-    , TokenBundle (..)
+    ( TokenBundle (..)
     )
 import Cardano.Wallet.Primitive.Types.TokenBundle.Gen
     ( genTokenBundleSmallRangePositive
@@ -1362,13 +1361,13 @@ prop_runSelection_UTxO_moreThanEnough utxoAvailable strategy = monadicIO $ do
         "size assetsRequested >= 4"
     monitor $ counterexample $ unlines
         [ "balance available:"
-        , pp (Flat balanceAvailable)
+        , pp balanceAvailable
         , "balance requested:"
-        , pp (Flat balanceRequested)
+        , pp balanceRequested
         , "balance selected:"
-        , pp (Flat balanceSelected)
+        , pp balanceSelected
         , "balance leftover:"
-        , pp (Flat balanceLeftover)
+        , pp balanceLeftover
         ]
     assertWith
         "utxoAvailable `UTxOSelection.isSubSelectionOf` result"
@@ -1410,13 +1409,13 @@ prop_runSelection_UTxO_muchMoreThanEnough (Blind (Large index)) strategy =
             "size assetsRequested >= 4"
         monitor $ counterexample $ unlines
             [ "balance available:"
-            , pp (Flat balanceAvailable)
+            , pp balanceAvailable
             , "balance requested:"
-            , pp (Flat balanceRequested)
+            , pp balanceRequested
             , "balance selected:"
-            , pp (Flat balanceSelected)
+            , pp balanceSelected
             , "balance leftover:"
-            , pp (Flat balanceLeftover)
+            , pp balanceLeftover
             ]
         assertWith
             "utxoAvailable `UTxOSelection.isSubSelectionOf` result"
@@ -2901,21 +2900,21 @@ prop_makeChange_success_delta p change =
     counterExampleText :: String
     counterExampleText = unlines
         [ "totalInputValue"
-        , pp (Flat totalInputValue)
+        , pp totalInputValue
         , "totalOutputValue"
-        , pp (Flat totalOutputValue)
+        , pp totalOutputValue
         , "required cost"
-        , pp (Flat $ TokenBundle.fromCoin (view #requiredCost p))
+        , pp $ TokenBundle.fromCoin (view #requiredCost p)
         , "assetsToMint"
-        , pp (Flat $ view #assetsToMint p)
+        , pp $ view #assetsToMint p
         , "assetsToBurn"
-        , pp (Flat $ view #assetsToBurn p)
+        , pp $ view #assetsToBurn p
         , "change"
-        , pp (Flat $ F.fold change)
+        , pp $ F.fold change
         , "outputsToCover"
-        , pp (Flat $ F.fold (outputBundles p))
+        , pp $ F.fold (outputBundles p)
         , "selected:"
-        , pp (Flat $ F.fold (inputBundles p))
+        , pp $ F.fold (inputBundles p)
         , "totalChangeValue:"
         , pp totalChangeCoin
         , "totalOutputValue:"
@@ -2960,7 +2959,7 @@ prop_makeChange_success_minValueRespected p =
       where
         counterexampleText = unlines
             [ "bundle:"
-            , pp (Flat m)
+            , pp m
             , "minCoinValue:"
             , pp minCoinValue
             ]
@@ -3027,7 +3026,7 @@ prop_makeChange_fail_minValueTooBig p =
           where
             counterexampleText = unlines
                 [ "change:"
-                , pp (Flat <$> change)
+                , pp change
                 , "delta:"
                 , pp deltaCoin
                 , "totalMinCoinDeposit:"
