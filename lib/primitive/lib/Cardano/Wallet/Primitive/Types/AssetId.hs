@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 
 module Cardano.Wallet.Primitive.Types.AssetId
     ( AssetId (..)
@@ -16,6 +16,10 @@ import Cardano.Wallet.Primitive.Types.TokenPolicyId
 import Control.DeepSeq
     ( NFData
     )
+import Fmt
+    ( Buildable (..)
+    , GenericBuildable (..)
+    )
 import GHC.Generics
     ( Generic
     )
@@ -30,5 +34,6 @@ data AssetId = AssetId
         :: !AssetName
     }
     deriving stock (Eq, Generic, Ord, Read, Show)
+    deriving Buildable via GenericBuildable AssetId
 
 instance NFData AssetId
