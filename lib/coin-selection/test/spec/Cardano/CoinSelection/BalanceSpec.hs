@@ -235,7 +235,6 @@ import Data.Word
 import Fmt
     ( Buildable (..)
     , blockListF
-    , pretty
     )
 import Generics.SOP
     ( NP (..)
@@ -1370,13 +1369,13 @@ prop_runSelection_UTxO_moreThanEnough utxoAvailable strategy = monadicIO $ do
         "size assetsRequested >= 4"
     monitor $ counterexample $ unlines
         [ "balance available:"
-        , pretty (Flat balanceAvailable)
+        , pp (Flat balanceAvailable)
         , "balance requested:"
-        , pretty (Flat balanceRequested)
+        , pp (Flat balanceRequested)
         , "balance selected:"
-        , pretty (Flat balanceSelected)
+        , pp (Flat balanceSelected)
         , "balance leftover:"
-        , pretty (Flat balanceLeftover)
+        , pp (Flat balanceLeftover)
         ]
     assertWith
         "utxoAvailable `UTxOSelection.isSubSelectionOf` result"
@@ -1418,13 +1417,13 @@ prop_runSelection_UTxO_muchMoreThanEnough (Blind (Large index)) strategy =
             "size assetsRequested >= 4"
         monitor $ counterexample $ unlines
             [ "balance available:"
-            , pretty (Flat balanceAvailable)
+            , pp (Flat balanceAvailable)
             , "balance requested:"
-            , pretty (Flat balanceRequested)
+            , pp (Flat balanceRequested)
             , "balance selected:"
-            , pretty (Flat balanceSelected)
+            , pp (Flat balanceSelected)
             , "balance leftover:"
-            , pretty (Flat balanceLeftover)
+            , pp (Flat balanceLeftover)
             ]
         assertWith
             "utxoAvailable `UTxOSelection.isSubSelectionOf` result"
@@ -1738,7 +1737,7 @@ prop_assetSelectionLens_givesPriorityToSingletonAssets (Blind (Small u)) =
         monitor $ cover 20 (not hasSingletonAsset)
             "There are no singleton entries that match"
         monitor $ counterexample $ unlines
-            ["UTxO index:", pretty $ UTxOIndex.toList u]
+            ["UTxO index:", pp $ UTxOIndex.toList u]
         mUpdatedState <- run $ runSelectionStep lens initialState
         case mUpdatedState of
             Nothing -> do
@@ -1775,7 +1774,7 @@ prop_coinSelectionLens_givesPriorityToCoins (Blind (Small u)) =
         monitor $ cover 1 (not hasCoin)
             "There are no coins"
         monitor $ counterexample $ unlines
-            ["UTxO index:", pretty $ UTxOIndex.toList u]
+            ["UTxO index:", pp $ UTxOIndex.toList u]
         mUpdatedState <- run $ runSelectionStep lens initialState
         case mUpdatedState of
             Nothing -> do
@@ -2909,27 +2908,27 @@ prop_makeChange_success_delta p change =
     counterExampleText :: String
     counterExampleText = unlines
         [ "totalInputValue"
-        , pretty (Flat totalInputValue)
+        , pp (Flat totalInputValue)
         , "totalOutputValue"
-        , pretty (Flat totalOutputValue)
+        , pp (Flat totalOutputValue)
         , "required cost"
-        , pretty (Flat $ TokenBundle.fromCoin (view #requiredCost p))
+        , pp (Flat $ TokenBundle.fromCoin (view #requiredCost p))
         , "assetsToMint"
-        , pretty (Flat $ view #assetsToMint p)
+        , pp (Flat $ view #assetsToMint p)
         , "assetsToBurn"
-        , pretty (Flat $ view #assetsToBurn p)
+        , pp (Flat $ view #assetsToBurn p)
         , "change"
-        , pretty (Flat $ F.fold change)
+        , pp (Flat $ F.fold change)
         , "outputsToCover"
-        , pretty (Flat $ F.fold (outputBundles p))
+        , pp (Flat $ F.fold (outputBundles p))
         , "selected:"
-        , pretty (Flat $ F.fold (inputBundles p))
+        , pp (Flat $ F.fold (inputBundles p))
         , "totalChangeValue:"
-        , pretty totalChangeCoin
+        , pp totalChangeCoin
         , "totalOutputValue:"
-        , pretty totalOutputCoin
+        , pp totalOutputCoin
         , "totalInputValue:"
-        , pretty totalInputCoin
+        , pp totalInputCoin
         ]
     totalInputValue =
         F.fold (inputBundles p)
@@ -2968,9 +2967,9 @@ prop_makeChange_success_minValueRespected p =
       where
         counterexampleText = unlines
             [ "bundle:"
-            , pretty (Flat m)
+            , pp (Flat m)
             , "minCoinValue:"
-            , pretty minCoinValue
+            , pp minCoinValue
             ]
         minCoinValue = minCoinValueFor tokens
 
@@ -2989,7 +2988,7 @@ prop_makeChange_fail_costTooBig p =
             totalOutputValue
     in
         deltaCoin < view #requiredCost p
-            & counterexample ("delta: " <> pretty deltaCoin)
+            & counterexample ("delta: " <> pp deltaCoin)
   where
     totalInputValue =
         F.fold (inputBundles p)
@@ -3035,11 +3034,11 @@ prop_makeChange_fail_minValueTooBig p =
           where
             counterexampleText = unlines
                 [ "change:"
-                , pretty (blockListF (Flat <$> change))
+                , pp (blockListF (Flat <$> change))
                 , "delta:"
-                , pretty deltaCoin
+                , pp deltaCoin
                 , "totalMinCoinDeposit:"
-                , pretty totalMinCoinDeposit
+                , pp totalMinCoinDeposit
                 ]
             deltaCoin = TokenBundle.getCoin $
                 totalInputValue <\>
