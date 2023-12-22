@@ -104,9 +104,6 @@ import Data.Map.Strict
 import Data.Set
     ( Set
     )
-import Fmt
-    ( Buildable (..)
-    )
 import GHC.Generics
     ( Generic
     )
@@ -177,12 +174,6 @@ data WalletUTxO = WalletUTxO
         :: !W.Address
     }
     deriving (Eq, Generic, Ord, Show)
-
-instance Buildable WalletUTxO where
-    build (WalletUTxO i a) = build i <> ":" <> build a
-
-instance Buildable (WalletUTxO, W.TokenBundle) where
-    build (u, b) = build u <> ":" <> build (W.TokenBundle.Flat b)
 
 toExternalUTxO :: (WalletUTxO, W.TokenBundle) -> (W.TxIn, W.TxOut)
 toExternalUTxO = toExternalUTxO' id
