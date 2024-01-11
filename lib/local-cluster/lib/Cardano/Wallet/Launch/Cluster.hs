@@ -1161,8 +1161,8 @@ generateGenesis Config{..} initialFunds genesisMods = do
             { sgSystemStart = systemStart
             , sgActiveSlotsCoeff = unsafePositiveUnitInterval 0.5
             , sgSecurityParam = 10
-            , sgEpochLength = 100
-            , sgSlotLength = 0.1
+            , sgEpochLength = 120
+            , sgSlotLength = 0.12
             , sgUpdateQuorum = 1
             , sgNetworkMagic =
                 fromIntegral (testnetMagicToNatural cfgTestnetMagic)
