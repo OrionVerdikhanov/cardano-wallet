@@ -65,7 +65,6 @@ import Cardano.Wallet.Launch.Cluster
     , LogFileConfig (..)
     , RunningNode (..)
     , clusterEraFromEnv
-    , moveInstantaneousRewardsTo
     , runClusterM
     , sendFaucetAssetsTo
     , withCluster
@@ -73,8 +72,7 @@ import Cardano.Wallet.Launch.Cluster
     , withSMASH
     )
 import Cardano.Wallet.Launch.Cluster.Env
-    ( clusterEraFromEnv
-    , nodeOutputFileFromEnv
+    ( nodeOutputFileFromEnv
     )
 import Cardano.Wallet.Network.Implementation.Ouroboros
     ( tunedForMainnetPipeliningStrategy
