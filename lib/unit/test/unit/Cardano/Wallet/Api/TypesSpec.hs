@@ -281,6 +281,7 @@ import Cardano.Wallet.Api.Types.Error
     , ApiErrorNotEnoughMoneyShortfall (..)
     , ApiErrorSharedWalletNoSuchCosigner (..)
     , ApiErrorTxOutputLovelaceInsufficient (..)
+    , ApiErrorTxOutputTokenQuantityExceedsLimit (..)
     )
 import Cardano.Wallet.Api.Types.SchemaMetadata
     ( TxMetadataSchema (..)
@@ -786,6 +787,7 @@ spec = do
         jsonTest @ApiError
         jsonTest @ApiErrorSharedWalletNoSuchCosigner
         jsonTest @ApiErrorTxOutputLovelaceInsufficient
+        jsonTest @(ApiErrorTxOutputTokenQuantityExceedsLimit T0)
         jsonTest @ApiErrorBalanceTxUnderestimatedFee
         jsonTest @ApiErrorNodeNotYetInRecentEra
         jsonTest @ApiErrorNotEnoughMoney
@@ -2434,6 +2436,13 @@ instance Arbitrary ApiErrorSharedWalletNoSuchCosigner where
     shrink = genericShrink
 
 instance Arbitrary ApiErrorTxOutputLovelaceInsufficient where
+    arbitrary = genericArbitrary
+    shrink = genericShrink
+
+instance
+    HasSNetworkId n =>
+    Arbitrary (ApiErrorTxOutputTokenQuantityExceedsLimit n)
+  where
     arbitrary = genericArbitrary
     shrink = genericShrink
 

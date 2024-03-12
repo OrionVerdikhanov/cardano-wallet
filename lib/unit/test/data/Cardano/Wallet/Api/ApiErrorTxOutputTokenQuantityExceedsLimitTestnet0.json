@@ -1,0 +1,75 @@
+{
+    "samples": [
+        {
+            "tx_output_address": "FHnt4NL7yPYAU2NAJ37PhWinX8HNzuGQRTnJfM1mzZUACxPwn1YqMVw9FYPTzgq",
+            "tx_output_asset_name": "0005030406050407050706070407070103040008070601000608080707040705",
+            "tx_output_token_policy_id": "05000804000701000806030406080005050108050103040405040201",
+            "tx_output_token_quantity": 0,
+            "tx_output_token_quantity_upper_limit": 5
+        },
+        {
+            "tx_output_address": "FHnt4NL7yPYCBpdzXumtFFSwhfGJUDwDWdafL1fAsXWsMnpQv7YRp3sR1T4DALa",
+            "tx_output_asset_name": "0603010202000800030201080401010804000703070806040402070105080104",
+            "tx_output_token_policy_id": "02060803050802010302080707070208050505040008060700010707",
+            "tx_output_token_quantity": 0,
+            "tx_output_token_quantity_upper_limit": 6
+        },
+        {
+            "tx_output_address": "addr_test1xqc7mwjkj63adn3awpvlkdz2z946pdh6ngfu79p546yqfx3l8mjtm2qsphql3gt8mdrrkqzl52apl6jdshqh7xfnk0eqn0ueva",
+            "tx_output_asset_name": "0207000703010806080202060708030401070703050700020105000101070006",
+            "tx_output_token_policy_id": "05080702000402050007060202000706030607060300070707030404",
+            "tx_output_token_quantity": 6,
+            "tx_output_token_quantity_upper_limit": 5
+        },
+        {
+            "tx_output_address": "addr_test1yz9pzjdv682cgf6j6kdcrv4kdjmmk8yhnuufxs8jyt3te2s656y2mgl34cukt63vjnz7wenly74smx7vztm7skzllhfsly6zqt",
+            "tx_output_asset_name": "0007070107080007050105020505060504020007020808060805080705080208",
+            "tx_output_token_policy_id": "02050603030301000502050401020604000606010100060200050105",
+            "tx_output_token_quantity": 0,
+            "tx_output_token_quantity_upper_limit": 2
+        },
+        {
+            "tx_output_address": "addr_test1qzduqnlkzfh25d8ex2jf0trd328n2qt2vexva2asxkg40vacg0u7uu26tsldnnklrypttvak0sfs732cqsxlauyf76hs09q59p",
+            "tx_output_asset_name": "0608020208050308070805010004020206030708080200000404070702050802",
+            "tx_output_token_policy_id": "06000000030706050504050700020305070203040200040804080303",
+            "tx_output_token_quantity": 0,
+            "tx_output_token_quantity_upper_limit": 2
+        },
+        {
+            "tx_output_address": "addr_test1yqv8pq903ckg7h59cxsd9mpclaa9ch5m72hhfnf5e2hr0tnqnu48fuff58d7as39l95e5xnd5z2gvx4svjuyurlxy80qtyjs5s",
+            "tx_output_asset_name": "0208010300070505010706020708070005060300040702000302080301010301",
+            "tx_output_token_policy_id": "02060805040407040705040406000207020308080106010600030407",
+            "tx_output_token_quantity": 5,
+            "tx_output_token_quantity_upper_limit": 1
+        },
+        {
+            "tx_output_address": "FHnt4NL7yPXmkXfAoikQHH6fw6KhtMVWbCEFVAaYy7vX33tMXQCWwM9KWeKyhfr",
+            "tx_output_asset_name": "0700020404050204010503080105010100060804070003040702080808010703",
+            "tx_output_token_policy_id": "08000303040501000403080005040206030405010801000705070305",
+            "tx_output_token_quantity": 1,
+            "tx_output_token_quantity_upper_limit": 3
+        },
+        {
+            "tx_output_address": "addr_test1wznyv36t3a2rzfs4q6mvyu7nqlr4dxjwkmykkskafg54yzs735734",
+            "tx_output_asset_name": "0307010804010407040808000302060006010305030207070106080406050208",
+            "tx_output_token_policy_id": "01070706080702060008070308030001010000050808060503070102",
+            "tx_output_token_quantity": 2,
+            "tx_output_token_quantity_upper_limit": 4
+        },
+        {
+            "tx_output_address": "addr_test1vq90qh08dddknrax4pcg623kf33nj6rw986c7nlgktffccsqd359x",
+            "tx_output_asset_name": "0706070305040308000107080700040706060107070705000208060508000802",
+            "tx_output_token_policy_id": "02080308000802020801010403040502060206010600050801030403",
+            "tx_output_token_quantity": 1,
+            "tx_output_token_quantity_upper_limit": 5
+        },
+        {
+            "tx_output_address": "addr_test1vzjlmpczh55qhx2wd434y6cuep896tsvt83wnqntvvrcj9qregdrx",
+            "tx_output_asset_name": "0605020608060500000007000302040606010500060703020301050606010701",
+            "tx_output_token_policy_id": "07080108020604000007010804020305020300010202050101000403",
+            "tx_output_token_quantity": 1,
+            "tx_output_token_quantity_upper_limit": 0
+        }
+    ],
+    "seed": -1175443322
+}
