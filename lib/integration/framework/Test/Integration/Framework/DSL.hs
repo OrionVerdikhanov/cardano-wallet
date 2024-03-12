@@ -718,7 +718,7 @@ expectErrorMessage want = either expectation wantedErrorButSuccess . snd
 --   be decoded as an 'ApiErrorInfo' object.
 expectErrorInfo
     :: (HasCallStack, Show a)
-    => (ApiErrorInfo -> m ())
+    => (ApiErrorInfo n -> m ())
     -> (s, Either RequestException a)
     -> m ()
 expectErrorInfo f = f . decodeErrorInfo
@@ -727,7 +727,7 @@ expectErrorInfo f = f . decodeErrorInfo
 decodeErrorInfo
     :: (HasCallStack, Show a)
     => (s, Either RequestException a)
-    -> ApiErrorInfo
+    -> ApiErrorInfo n
 decodeErrorInfo (_, response) =
     case response of
         Left (ClientError value) ->

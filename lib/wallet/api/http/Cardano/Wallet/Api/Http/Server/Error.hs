@@ -239,7 +239,7 @@ liftE = liftHandler . throwE
 handler :: IO a -> Handler a
 handler = Handler . liftIO
 
-apiError :: ServerError -> ApiErrorInfo -> Text -> ServerError
+apiError :: ServerError -> ApiErrorInfo n -> Text -> ServerError
 apiError err info messageUnformatted = err
     { errBody = Aeson.encode ApiError {info, message}
     , errHeaders =

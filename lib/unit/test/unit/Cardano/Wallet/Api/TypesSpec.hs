@@ -784,7 +784,7 @@ spec = do
         jsonTest @ApiDelegationAction
         jsonTest @ApiEra
         jsonTest @ApiEraInfo
-        jsonTest @ApiError
+        jsonTest @(ApiError T0)
         jsonTest @ApiErrorSharedWalletNoSuchCosigner
         jsonTest @ApiErrorTxOutputLovelaceInsufficient
         jsonTest @(ApiErrorTxOutputTokenQuantityExceedsLimit T0)
@@ -1166,7 +1166,7 @@ data SchemaApiErrorInfo = SchemaApiErrorInfo
 instance FromJSON SchemaApiErrorInfo where
     parseJSON = withObject "SchemaApiErrorInfo" $ \o -> do
         let constructors :: [String] =
-                showConstr <$> dataTypeConstrs (dataTypeOf NoSuchWallet)
+                showConstr <$> dataTypeConstrs (dataTypeOf (NoSuchWallet @T0))
         vals :: [Either String Yaml.Value] <-
             forM constructors $ \c ->
                 maybe (Left c) Right <$> o .:? Aeson.fromString (toSchemaName c)
@@ -2419,11 +2419,11 @@ instance Arbitrary TxMetadata where
     arbitrary = genNestedTxMetadata
     shrink = shrinkTxMetadata
 
-instance Arbitrary ApiError where
+instance Arbitrary (ApiError n) where
     arbitrary = genericArbitrary
     shrink = genericShrink
 
-instance Arbitrary ApiErrorInfo where
+instance Arbitrary (ApiErrorInfo n) where
     arbitrary = genericArbitrary
     shrink = genericShrink
 

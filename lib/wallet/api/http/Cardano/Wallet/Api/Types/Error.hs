@@ -102,19 +102,19 @@ import Numeric.Natural
     ( Natural
     )
 
-data ApiError = ApiError
-    { info :: !ApiErrorInfo
+data ApiError (n :: NetworkDiscriminant) = ApiError
+    { info :: !(ApiErrorInfo n)
     , message :: !ApiErrorMessage
     }
     deriving (Eq, Generic, Show)
     deriving anyclass NFData
 
-instance ToJSON ApiError where
+instance ToJSON (ApiError n) where
     toJSON ApiError {info, message}
         = fromMaybe (error "ToJSON ApiError: Unexpected encoding")
         $ toJSON info `objectUnion` toJSON message
 
-instance FromJSON ApiError where
+instance FromJSON (ApiError n) where
     parseJSON o = ApiError <$> parseJSON o <*> parseJSON o
 
 newtype ApiErrorMessage = ApiErrorMessage {message :: Text}
@@ -122,7 +122,7 @@ newtype ApiErrorMessage = ApiErrorMessage {message :: Text}
     deriving (FromJSON, ToJSON) via DefaultRecord ApiErrorMessage
     deriving anyclass NFData
 
-data ApiErrorInfo
+data ApiErrorInfo (n :: NetworkDiscriminant)
     = AddressAlreadyExists
     | AlreadyWithdrawing
     | AssetNameTooLong
@@ -223,10 +223,10 @@ data ApiErrorInfo
     deriving (Eq, Generic, Show, Data, Typeable)
     deriving anyclass NFData
 
-instance FromJSON ApiErrorInfo where
+instance FromJSON (ApiErrorInfo n) where
     parseJSON = genericParseJSON apiErrorInfoOptions
 
-instance ToJSON ApiErrorInfo where
+instance ToJSON (ApiErrorInfo n) where
     toJSON = genericToJSON apiErrorInfoOptions
 
 apiErrorInfoOptions :: Options
