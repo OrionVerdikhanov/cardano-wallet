@@ -26,6 +26,7 @@ module Cardano.Wallet.Api.Types.Error
     -- * Specific API error types
     , ApiErrorSharedWalletNoSuchCosigner (..)
     , ApiErrorTxOutputLovelaceInsufficient (..)
+    , ApiErrorTxOutputTokenQuantityExceedsLimit (..)
     , ApiErrorBalanceTxUnderestimatedFee (..)
     , ApiErrorNodeNotYetInRecentEra (..)
     , ApiErrorNotEnoughMoney (..)
