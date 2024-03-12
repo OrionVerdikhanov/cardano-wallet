@@ -389,7 +389,10 @@ instance IsServerError ErrMkTransaction where
         ErrMkTransactionTxBodyError hint ->
             apiError err500 CreatedInvalidTransaction hint
         ErrMkTransactionOutputTokenQuantityExceedsLimit e ->
-            apiError err403 OutputTokenQuantityExceedsLimit $ mconcat
+            apiError err403 info message
+          where
+            info = OutputTokenQuantityExceedsLimit
+            message = mconcat
                 [ "One of the token quantities you've specified is greater "
                 , "than the maximum quantity allowed in a single transaction "
                 , "output. "
@@ -1012,7 +1015,10 @@ instance IsServerError ErrBalanceTxOutputError where
                     toWalletTokenBundle (snd output) ^. #tokens
         ErrBalanceTxOutputTokenQuantityExceedsLimit
             {address, policyId, assetName, quantity, quantityMaxBound} ->
-            apiError err403 OutputTokenQuantityExceedsLimit $ mconcat
+            apiError err403 info message
+          where
+            info = OutputTokenQuantityExceedsLimit
+            message = mconcat
                 [ "One of the token quantities you've specified is greater "
                 , "than the maximum quantity allowed in a single transaction "
                 , "output. Try splitting this quantity across two or more "
