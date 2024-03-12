@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -126,6 +127,9 @@ import Data.Aeson.Types
 import Data.Bifunctor
     ( first
     )
+import Data.Data
+    ( Data
+    )
 import Data.Hashable
     ( Hashable
     )
@@ -164,7 +168,7 @@ import qualified Data.Aeson.Types as Aeson
 
 newtype ApiAddress (n :: NetworkDiscriminant)
     = ApiAddress {apiAddress :: Address}
-        deriving (Eq, Generic, Show, NFData, Ord, Hashable)
+        deriving (Eq, Generic, Show, NFData, Ord, Hashable, Data, Typeable)
 
 instance HasSNetworkId n => FromJSON (ApiAddress n)
   where
