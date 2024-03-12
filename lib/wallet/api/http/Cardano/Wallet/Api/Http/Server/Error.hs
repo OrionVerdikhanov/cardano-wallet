@@ -391,7 +391,11 @@ instance IsServerError ErrMkTransaction where
         ErrMkTransactionOutputTokenQuantityExceedsLimit e ->
             apiError err403 info message
           where
-            info = OutputTokenQuantityExceedsLimit
+            info =
+                OutputTokenQuantityExceedsLimit
+                ApiErrorTxOutputTokenQuantityExceedsLimit
+                    { txOutputAddress = view #address e
+                    }
             message = mconcat
                 [ "One of the token quantities you've specified is greater "
                 , "than the maximum quantity allowed in a single transaction "

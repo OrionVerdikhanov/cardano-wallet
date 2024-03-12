@@ -56,7 +56,8 @@ import Cardano.Wallet.Api.Types.WalletAssets
     ( ApiWalletAssets
     )
 import Cardano.Wallet.Primitive.NetworkId
-    ( NetworkDiscriminant
+    ( HasSNetworkId (..)
+    , NetworkDiscriminant (..)
     )
 import Cardano.Wallet.Primitive.Types.AssetName
     ( AssetName
@@ -109,12 +110,12 @@ data ApiError (n :: NetworkDiscriminant) = ApiError
     deriving (Eq, Generic, Show)
     deriving anyclass NFData
 
-instance ToJSON (ApiError n) where
+instance HasSNetworkId n => ToJSON (ApiError n) where
     toJSON ApiError {info, message}
         = fromMaybe (error "ToJSON ApiError: Unexpected encoding")
         $ toJSON info `objectUnion` toJSON message
 
-instance FromJSON (ApiError n) where
+instance HasSNetworkId n => FromJSON (ApiError n) where
     parseJSON o = ApiError <$> parseJSON o <*> parseJSON o
 
 newtype ApiErrorMessage = ApiErrorMessage {message :: Text}
@@ -181,6 +182,7 @@ data ApiErrorInfo (n :: NetworkDiscriminant)
     | NothingToMigrate
     | OutputTokenBundleSizeExceedsLimit
     | OutputTokenQuantityExceedsLimit
+        !(ApiErrorTxOutputTokenQuantityExceedsLimit n)
     | PastHorizon
     | PoolAlreadyJoined
     | QueryParamMissing
@@ -223,10 +225,10 @@ data ApiErrorInfo (n :: NetworkDiscriminant)
     deriving (Eq, Generic, Show, Data, Typeable)
     deriving anyclass NFData
 
-instance FromJSON (ApiErrorInfo n) where
+instance HasSNetworkId n => FromJSON (ApiErrorInfo n) where
     parseJSON = genericParseJSON apiErrorInfoOptions
 
-instance ToJSON (ApiErrorInfo n) where
+instance HasSNetworkId n => ToJSON (ApiErrorInfo n) where
     toJSON = genericToJSON apiErrorInfoOptions
 
 apiErrorInfoOptions :: Options
