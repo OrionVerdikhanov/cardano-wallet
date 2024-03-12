@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -fno-specialise #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
@@ -34,12 +35,16 @@ module Cardano.Wallet.Api.Types.Error
 
 import Prelude
 
+import Cardano.Wallet.Api.Lib.ApiT
+    ( ApiT (..)
+    )
 import Cardano.Wallet.Api.Lib.Options
     ( DefaultRecord (..)
     , defaultSumTypeOptions
     )
 import Cardano.Wallet.Api.Types
-    ( ApiCosignerIndex (..)
+    ( ApiAddress
+    , ApiCosignerIndex (..)
     , ApiCredentialType (..)
     , ApiEra
     )
@@ -48,6 +53,15 @@ import Cardano.Wallet.Api.Types.Amount
     )
 import Cardano.Wallet.Api.Types.WalletAssets
     ( ApiWalletAssets
+    )
+import Cardano.Wallet.Primitive.NetworkId
+    ( NetworkDiscriminant
+    )
+import Cardano.Wallet.Primitive.Types.AssetName
+    ( AssetName
+    )
+import Cardano.Wallet.Primitive.Types.TokenPolicyId
+    ( TokenPolicyId
     )
 import Control.DeepSeq
     ( NFData (..)
@@ -244,6 +258,19 @@ data ApiErrorTxOutputLovelaceInsufficient = ApiErrorTxOutputLovelaceInsufficient
     deriving (Data, Eq, Generic, Show, Typeable)
     deriving (FromJSON, ToJSON)
         via DefaultRecord ApiErrorTxOutputLovelaceInsufficient
+    deriving anyclass NFData
+
+data ApiErrorTxOutputTokenQuantityExceedsLimit (n :: NetworkDiscriminant) =
+    ApiErrorTxOutputTokenQuantityExceedsLimit
+        { txOutputAddress :: !(ApiAddress n)
+        , txOutputAssetName :: !(ApiT AssetName)
+        , txOutputTokenPolicyId :: !(ApiT TokenPolicyId)
+        , txOutputTokenQuantity :: !Natural
+        , txOutputTokenQuantityUpperLimit :: !Natural
+        }
+    deriving (Data, Eq, Generic, Show, Typeable)
+    deriving (FromJSON, ToJSON)
+        via DefaultRecord (ApiErrorTxOutputTokenQuantityExceedsLimit n)
     deriving anyclass NFData
 
 data ApiErrorBalanceTxUnderestimatedFee = ApiErrorBalanceTxUnderestimatedFee
