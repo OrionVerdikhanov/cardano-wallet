@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -28,6 +29,9 @@ module Cardano.Wallet.Primitive.NetworkId
 
 import Prelude
 
+import Data.Data
+    ( Data
+    )
 import Data.Proxy
     ( Proxy (..)
     )
@@ -70,7 +74,7 @@ import qualified Data.Text as T
 --              starting the application.
 --
 data NetworkDiscriminant = Mainnet | Testnet Nat
-    deriving (Typeable)
+    deriving (Data, Typeable)
 
 class NetworkDiscriminantCheck k where
     networkDiscriminantCheck :: SNetworkId n -> Word8 -> Bool
