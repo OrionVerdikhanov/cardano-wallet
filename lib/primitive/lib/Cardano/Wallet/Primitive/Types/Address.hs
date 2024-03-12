@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 
@@ -29,6 +30,9 @@ import Data.ByteArray.Encoding
 import Data.ByteString
     ( ByteString
     )
+import Data.Data
+    ( Data
+    )
 import Data.Hashable
     ( Hashable
     )
@@ -39,6 +43,9 @@ import Data.Text.Class
     , ToText (..)
     , fromTextToBoundedEnum
     , toTextFromBoundedEnum
+    )
+import Data.Typeable
+    ( Typeable
     )
 import Fmt
     ( Buildable (..)
@@ -106,6 +113,7 @@ newtype Address = Address
     deriving (Generic, Eq, Ord)
     deriving anyclass (NFData, Hashable)
     deriving (Read, Show) via (Quiet Address)
+    deriving (Data, Typeable)
 
 instance Buildable Address where
     build addr = mempty
