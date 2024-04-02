@@ -45,8 +45,14 @@ import Cardano.Wallet.Primitive.Types.Coin
 import Control.Lens
     ( over
     )
+import Control.Monad.Cont
+    ( ContT (..)
+    )
 import Control.Monad.IO.Class
     ( MonadIO (..)
+    )
+import Control.Monad.Trans
+    ( lift
     )
 import Control.Monad.Trans.Resource
     ( allocate
@@ -190,7 +196,7 @@ import qualified Path.IO as PathIO
 -- - NO_CLEANUP  (default: temp files are cleaned up)
 --     If set, the temporary directory used as a state directory for
 --     nodes and wallet data won't be cleaned up.
-main ::  IO ()
+main :: IO ()
 main = withUtf8 $ do
     -- Handle SIGTERM properly
     installSignalHandlers (putStrLn "Terminated")
@@ -205,7 +211,8 @@ main = withUtf8 $ do
         Cluster.logFileConfigFromEnv
             (Just (Cluster.clusterEraToString clusterEra))
     CommandLineOptions{clusterConfigsDir} <- parseCommandLineOptions
-    withSystemTempDir tr "test-cluster" skipCleanup $ \clusterPath -> do
+    flip runContT pure $ do
+        clusterPath <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
@@ -218,45 +225,46 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     }
-        withFaucet $ \faucetClientEnv -> do
-            maryAllegraFunds <-
-                liftIO
-                    $ runFaucetM faucetClientEnv
-                    $ Faucet.maryAllegraFunds (Coin 10_000_000) shelleyTestnet
-            Cluster.withCluster
-                clusterCfg
-                Cluster.FaucetFunds
-                    { pureAdaFunds = []
-                    , maryAllegraFunds
-                    , massiveWalletFunds = []
-                    }
-                $ \node -> do
-                    clusterDir <- Path.parseAbsDir clusterPath
-                    let walletDir = clusterDir Path.</> [Path.reldir|wallet|]
-                    PathIO.createDirIfMissing False walletDir
-                    nodeSocket <-
-                        Path.parseAbsFile . nodeSocketFile
-                            $ Cluster.runningNodeSocketPath node
-
-                    runResourceT do
-                        (_releaseKey, (_walletInstance, _walletApi)) <-
-                            allocate
-                                ( WC.start
-                                    WC.WalletProcessConfig
-                                        { WC.walletDir =
-                                            walletDir
-                                        , WC.walletNodeApi =
-                                            NC.NodeApi nodeSocket
-                                        , WC.walletDatabase =
-                                            clusterDir Path.</> [Path.reldir|db|]
-                                        , WC.walletListenHost =
-                                            Nothing
-                                        , WC.walletListenPort =
-                                            Nothing
-                                        , WC.walletByronGenesisForTestnet =
-                                            Just
-                                                $ clusterDir Path.</> [Path.relfile|genesis-byron.json|]
-                                        }
-                                )
-                                (WC.stop . fst)
-                        threadDelay maxBound -- wait for Ctrl+C
+        faucetClientEnv <- ContT withFaucet
+        maryAllegraFunds <-
+            liftIO
+                $ runFaucetM faucetClientEnv
+                $ Faucet.maryAllegraFunds (Coin 10_000_000) shelleyTestnet
+        node <-
+            ContT
+                $ Cluster.withCluster
+                    clusterCfg
+                    Cluster.FaucetFunds
+                        { pureAdaFunds = []
+                        , maryAllegraFunds
+                        , massiveWalletFunds = []
+                        }
+        clusterDir <- Path.parseAbsDir clusterPath
+        let walletDir = clusterDir Path.</> [Path.reldir|wallet|]
+        PathIO.createDirIfMissing False walletDir
+        nodeSocket <-
+            Path.parseAbsFile . nodeSocketFile
+                $ Cluster.runningNodeSocketPath node
+        lift $ runResourceT $ do
+            (_releaseKey, (_walletInstance, _walletApi)) <-
+                allocate
+                    ( WC.start
+                        WC.WalletProcessConfig
+                            { WC.walletDir =
+                                walletDir
+                            , WC.walletNodeApi =
+                                NC.NodeApi nodeSocket
+                            , WC.walletDatabase =
+                                clusterDir Path.</> [Path.reldir|db|]
+                            , WC.walletListenHost =
+                                Nothing
+                            , WC.walletListenPort =
+                                Nothing
+                            , WC.walletByronGenesisForTestnet =
+                                Just
+                                    $ clusterDir
+                                        Path.</> [Path.relfile|genesis-byron.json|]
+                            }
+                    )
+                    (WC.stop . fst)
+            threadDelay maxBound -- wait for Ctrl+C
