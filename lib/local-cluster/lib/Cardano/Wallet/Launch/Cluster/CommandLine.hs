@@ -7,6 +7,8 @@ module Cardano.Wallet.Launch.Cluster.CommandLine
     , clusterConfigsDirParser
     ) where
 
+import Prelude
+
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
@@ -22,17 +24,22 @@ import Options.Applicative
     , strOption
     , (<**>)
     )
-import Prelude
 
-newtype CommandLineOptions = CommandLineOptions
-    {clusterConfigsDir :: FileOf "cluster-configs"}
+data CommandLineOptions = CommandLineOptions
+    { clusterConfigsDir :: FileOf "cluster-configs"
+    , faucetFundsFile :: FileOf "faucet-funds"
+    }
     deriving stock (Show)
 
 parseCommandLineOptions :: IO CommandLineOptions
 parseCommandLineOptions =
     execParser
         $ info
-            (fmap CommandLineOptions clusterConfigsDirParser <**> helper)
+            ( CommandLineOptions
+                <$> clusterConfigsDirParser
+                <*> faucetFundsParser
+                <**> helper
+            )
             (progDesc "Local Cluster for testing")
 
 clusterConfigsDirParser :: Parser (FileOf "cluster-configs")
@@ -42,4 +49,13 @@ clusterConfigsDirParser =
             ( long "cluster-configs"
                 <> metavar "LOCAL_CLUSTER_CONFIGS"
                 <> help "Path to the local cluster configuration directory"
+            )
+
+faucetFundsParser :: Parser (FileOf "faucet-funds")
+faucetFundsParser =
+    FileOf
+        <$> strOption
+            ( long "faucet-funds"
+                <> metavar "FAUCET_FUNDS"
+                <> help "Path to the faucet funds configuration file"
             )

@@ -12,9 +12,6 @@
 
 import Prelude
 
-import Cardano.Address.Style.Shelley
-    ( shelleyTestnet
-    )
 import Cardano.BM.Extra
     ( stdoutTextTracer
     )
@@ -25,12 +22,8 @@ import Cardano.Startup
     ( installSignalHandlers
     , setDefaultFilePermissions
     )
-import Cardano.Wallet.Faucet
-    ( runFaucetM
-    )
-import Cardano.Wallet.Launch.Cluster
-    ( FaucetFunds (..)
-    , withFaucet
+import Cardano.Wallet.Faucet.Yaml
+    ( retrieveFunds
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
@@ -38,9 +31,6 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
-    )
-import Cardano.Wallet.Primitive.Types.Coin
-    ( Coin (..)
     )
 import Control.Exception
     ( bracket
@@ -50,9 +40,6 @@ import Control.Lens
     )
 import Control.Monad.Cont
     ( ContT (..)
-    )
-import Control.Monad.IO.Class
-    ( MonadIO (..)
     )
 import Control.Monad.Trans
     ( lift
@@ -73,7 +60,6 @@ import UnliftIO.Concurrent
 
 import qualified Cardano.Node.Cli.Launcher as NC
 import qualified Cardano.Wallet.Cli.Launcher as WC
-import qualified Cardano.Wallet.Faucet as Faucet
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
 import qualified Path
 import qualified Path.IO as PathIO
@@ -145,7 +131,9 @@ main = withUtf8 $ do
     cfgNodeLogging <-
         Cluster.logFileConfigFromEnv
             (Just (Cluster.clusterEraToString clusterEra))
-    CommandLineOptions{clusterConfigsDir} <- parseCommandLineOptions
+    CommandLineOptions{clusterConfigsDir, faucetFundsFile} <-
+        parseCommandLineOptions
+    funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
         clusterPath <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
         let clusterCfg =
@@ -160,20 +148,7 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     }
-        faucetClientEnv <- ContT withFaucet
-        maryAllegraFunds <-
-            liftIO
-                $ runFaucetM faucetClientEnv
-                $ Faucet.maryAllegraFunds (Coin 10_000_000) shelleyTestnet
-        node <-
-            ContT
-                $ Cluster.withCluster
-                    clusterCfg
-                    Cluster.FaucetFunds
-                        { pureAdaFunds = []
-                        , maryAllegraFunds
-                        , massiveWalletFunds = []
-                        }
+        node <- ContT $ Cluster.withCluster clusterCfg funds
         clusterDir <- Path.parseAbsDir clusterPath
         let walletDir = clusterDir Path.</> [Path.reldir|wallet|]
         PathIO.createDirIfMissing False walletDir
