@@ -102,8 +102,7 @@ import Data.Either
     , isRight
     )
 import Data.Generics.Labels
-    (
-    )
+    ()
 import Data.List
     ( nub
     , permutations

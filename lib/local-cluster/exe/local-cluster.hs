@@ -10,8 +10,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Wallet.LocalCluster where
-
 import Prelude
 
 import Cardano.Address.Style.Shelley
@@ -34,14 +32,15 @@ import Cardano.Wallet.Launch.Cluster
     ( FaucetFunds (..)
     , withFaucet
     )
+import Cardano.Wallet.Launch.Cluster.CommandLine
+    ( CommandLineOptions (..)
+    , parseCommandLineOptions
+    )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..)
-    )
-import Control.Applicative
-    ( (<**>)
     )
 import Control.Lens
     ( over
@@ -71,7 +70,6 @@ import qualified Cardano.Node.Cli.Launcher as NC
 import qualified Cardano.Wallet.Cli.Launcher as WC
 import qualified Cardano.Wallet.Faucet as Faucet
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
-import qualified Options.Applicative as O
 import qualified Path
 import qualified Path.IO as PathIO
 
@@ -192,7 +190,7 @@ import qualified Path.IO as PathIO
 -- - NO_CLEANUP  (default: temp files are cleaned up)
 --     If set, the temporary directory used as a state directory for
 --     nodes and wallet data won't be cleaned up.
-main :: IO ()
+main ::  IO ()
 main = withUtf8 $ do
     -- Handle SIGTERM properly
     installSignalHandlers (putStrLn "Terminated")
@@ -262,23 +260,3 @@ main = withUtf8 $ do
                                 )
                                 (WC.stop . fst)
                         threadDelay maxBound -- wait for Ctrl+C
-
-newtype CommandLineOptions = CommandLineOptions
-    {clusterConfigsDir :: FileOf "cluster-configs"}
-    deriving stock (Show)
-
-parseCommandLineOptions :: IO CommandLineOptions
-parseCommandLineOptions =
-    O.execParser
-        $ O.info
-            (fmap CommandLineOptions clusterConfigsDirParser <**> O.helper)
-            (O.progDesc "Local Cluster for testing")
-
-clusterConfigsDirParser :: O.Parser (FileOf "cluster-configs")
-clusterConfigsDirParser =
-    FileOf
-        <$> O.strOption
-            ( O.long "cluster-configs"
-                <> O.metavar "LOCAL_CLUSTER_CONFIGS"
-                <> O.help "Path to the local cluster configuration directory"
-            )

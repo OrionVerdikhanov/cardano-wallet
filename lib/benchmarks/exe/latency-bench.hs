@@ -91,7 +91,7 @@ import Cardano.Wallet.Launch.Cluster
     , withCluster
     , withFaucet
     )
-import Cardano.Wallet.LocalCluster
+import Cardano.Wallet.Launch.Cluster.CommandLine
     ( clusterConfigsDirParser
     )
 import Cardano.Wallet.Network.Implementation.Ouroboros
