@@ -42,6 +42,9 @@ import Cardano.Wallet.Launch.Cluster.FileOf
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..)
     )
+import Control.Exception
+    ( bracket
+    )
 import Control.Lens
     ( over
     )
@@ -53,10 +56,6 @@ import Control.Monad.IO.Class
     )
 import Control.Monad.Trans
     ( lift
-    )
-import Control.Monad.Trans.Resource
-    ( allocate
-    , runResourceT
     )
 import Main.Utf8
     ( withUtf8
@@ -245,26 +244,21 @@ main = withUtf8 $ do
         nodeSocket <-
             Path.parseAbsFile . nodeSocketFile
                 $ Cluster.runningNodeSocketPath node
-        lift $ runResourceT $ do
-            (_releaseKey, (_walletInstance, _walletApi)) <-
-                allocate
-                    ( WC.start
-                        WC.WalletProcessConfig
-                            { WC.walletDir =
-                                walletDir
-                            , WC.walletNodeApi =
-                                NC.NodeApi nodeSocket
-                            , WC.walletDatabase =
-                                clusterDir Path.</> [Path.reldir|db|]
-                            , WC.walletListenHost =
-                                Nothing
-                            , WC.walletListenPort =
-                                Nothing
-                            , WC.walletByronGenesisForTestnet =
-                                Just
-                                    $ clusterDir
-                                        Path.</> [Path.relfile|genesis-byron.json|]
-                            }
-                    )
-                    (WC.stop . fst)
-            threadDelay maxBound -- wait for Ctrl+C
+        let walletProcessConfig =
+                WC.WalletProcessConfig
+                    { WC.walletDir
+                    , WC.walletNodeApi = NC.NodeApi nodeSocket
+                    , WC.walletDatabase = clusterDir Path.</> [Path.reldir|db|]
+                    , WC.walletListenHost = Nothing
+                    , WC.walletListenPort = Nothing
+                    , WC.walletByronGenesisForTestnet =
+                        Just
+                            $ clusterDir
+                                Path.</> [Path.relfile|genesis-byron.json|]
+                    }
+        lift
+            $ bracket
+                (WC.start walletProcessConfig)
+                (WC.stop . fst)
+            $ const
+            $ threadDelay maxBound -- wait for Ctrl+C
