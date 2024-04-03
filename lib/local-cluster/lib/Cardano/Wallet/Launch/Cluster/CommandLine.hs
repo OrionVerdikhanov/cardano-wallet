@@ -20,6 +20,7 @@ import Options.Applicative
     , info
     , long
     , metavar
+    , optional
     , progDesc
     , strOption
     , (<**>)
@@ -28,6 +29,7 @@ import Options.Applicative
 data CommandLineOptions = CommandLineOptions
     { clusterConfigsDir :: FileOf "cluster-configs"
     , faucetFundsFile :: FileOf "faucet-funds"
+    , clusterDir :: Maybe (FileOf "cluster")
     }
     deriving stock (Show)
 
@@ -38,6 +40,7 @@ parseCommandLineOptions =
             ( CommandLineOptions
                 <$> clusterConfigsDirParser
                 <*> faucetFundsParser
+                <*> clusterDirParser
                 <**> helper
             )
             (progDesc "Local Cluster for testing")
@@ -58,4 +61,13 @@ faucetFundsParser =
             ( long "faucet-funds"
                 <> metavar "FAUCET_FUNDS"
                 <> help "Path to the faucet funds configuration file"
+            )
+
+clusterDirParser :: Parser (Maybe (FileOf "cluster"))
+clusterDirParser = optional $
+    FileOf
+        <$> strOption
+            ( long "cluster"
+                <> metavar "LOCAL_CLUSTER"
+                <> help "Path to the local cluster directory"
             )

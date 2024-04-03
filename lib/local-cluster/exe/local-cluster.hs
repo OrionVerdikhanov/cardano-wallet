@@ -131,11 +131,14 @@ main = withUtf8 $ do
     cfgNodeLogging <-
         Cluster.logFileConfigFromEnv
             (Just (Cluster.clusterEraToString clusterEra))
-    CommandLineOptions{clusterConfigsDir, faucetFundsFile} <-
+    CommandLineOptions{clusterConfigsDir, faucetFundsFile, clusterDir} <-
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
-        clusterPath <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
+        clusterPath <-
+            case clusterDir of
+                Just (FileOf path) -> pure path
+                Nothing -> ContT $ withSystemTempDir tr "test-cluster" skipCleanup
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
@@ -149,8 +152,8 @@ main = withUtf8 $ do
                     , cfgNodeOutputFile = Nothing
                     }
         node <- ContT $ Cluster.withCluster clusterCfg funds
-        clusterDir <- Path.parseAbsDir clusterPath
-        let walletDir = clusterDir Path.</> [Path.reldir|wallet|]
+        absClusterDir <- Path.parseAbsDir clusterPath
+        let walletDir = absClusterDir Path.</> [Path.reldir|wallet|]
         PathIO.createDirIfMissing False walletDir
         nodeSocket <-
             Path.parseAbsFile . nodeSocketFile
@@ -159,12 +162,12 @@ main = withUtf8 $ do
                 WC.WalletProcessConfig
                     { WC.walletDir
                     , WC.walletNodeApi = NC.NodeApi nodeSocket
-                    , WC.walletDatabase = clusterDir Path.</> [Path.reldir|db|]
+                    , WC.walletDatabase = absClusterDir Path.</> [Path.reldir|db|]
                     , WC.walletListenHost = Nothing
                     , WC.walletListenPort = Nothing
                     , WC.walletByronGenesisForTestnet =
                         Just
-                            $ clusterDir
+                            $ absClusterDir
                                 Path.</> [Path.relfile|genesis-byron.json|]
                     }
         lift
