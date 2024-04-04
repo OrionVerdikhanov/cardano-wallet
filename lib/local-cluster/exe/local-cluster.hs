@@ -9,6 +9,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Prelude
 
@@ -29,8 +30,18 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
+import Cardano.Wallet.Launch.Cluster.Control.Server
+    ( server
+    )
+import Cardano.Wallet.Launch.Cluster.Control.State
+    ( changeLayerPhase
+    , withControlLayer
+    )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
+    )
+import Control.Concurrent
+    ( threadDelay
     )
 import Control.Exception
     ( bracket
@@ -38,14 +49,31 @@ import Control.Exception
 import Control.Lens
     ( over
     )
+import Control.Monad
+    ( void
+    , (<=<)
+    )
 import Control.Monad.Cont
     ( ContT (..)
     )
 import Control.Monad.Trans
-    ( lift
+    ( MonadIO (..)
     )
 import Main.Utf8
     ( withUtf8
+    )
+import Network.Wai.Handler.Warp
+    ( run
+    )
+import Path
+    ( parseAbsDir
+    , parseAbsFile
+    , reldir
+    , relfile
+    , (</>)
+    )
+import Path.IO
+    ( createDirIfMissing
     )
 import System.Environment.Extended
     ( isEnvSet
@@ -54,15 +82,14 @@ import System.IO.Temp.Extra
     ( SkipCleanup (..)
     , withSystemTempDir
     )
-import UnliftIO.Concurrent
-    ( threadDelay
+import UnliftIO
+    ( async
+    , link
     )
 
 import qualified Cardano.Node.Cli.Launcher as NC
 import qualified Cardano.Wallet.Cli.Launcher as WC
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
-import qualified Path
-import qualified Path.IO as PathIO
 
 -- |
 -- # OVERVIEW
@@ -131,15 +158,23 @@ main = withUtf8 $ do
     cfgNodeLogging <-
         Cluster.logFileConfigFromEnv
             (Just (Cluster.clusterEraToString clusterEra))
-    CommandLineOptions{clusterConfigsDir, faucetFundsFile, clusterDir} <-
+    CommandLineOptions
+        { clusterConfigsDir
+        , faucetFundsFile
+        , clusterDir
+        , monitoringPort
+        } <-
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
+        monitoring <- withControlLayer
+        liftIO $ link <=< async $ server monitoring >>= run monitoringPort
         clusterPath <-
             case clusterDir of
                 Just (FileOf path) -> pure path
-                Nothing -> ContT
-                    $ withSystemTempDir tr "test-cluster" skipCleanup
+                Nothing ->
+                    ContT
+                        $ withSystemTempDir tr "test-cluster" skipCleanup
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
@@ -152,12 +187,13 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     }
-        node <- ContT $ Cluster.withCluster clusterCfg funds
-        absClusterDir <- Path.parseAbsDir clusterPath
-        let walletDir = absClusterDir Path.</> [Path.reldir|wallet|]
-        PathIO.createDirIfMissing False walletDir
+        node <- ContT $ Cluster.withCluster (changeLayerPhase monitoring)
+            clusterCfg funds
+        absClusterDir <- parseAbsDir clusterPath
+        let walletDir = absClusterDir </> [reldir|wallet|]
+        createDirIfMissing False walletDir
         nodeSocket <-
-            Path.parseAbsFile . nodeSocketFile
+            parseAbsFile . nodeSocketFile
                 $ Cluster.runningNodeSocketPath node
         let walletProcessConfig =
                 WC.WalletProcessConfig
@@ -169,11 +205,11 @@ main = withUtf8 $ do
                     , WC.walletByronGenesisForTestnet =
                         Just
                             $ absClusterDir
-                                Path.</> [Path.relfile|genesis-byron.json|]
+                                </> [relfile|genesis-byron.json|]
                     }
-        lift
+        void
+            $ ContT
             $ bracket
                 (WC.start walletProcessConfig)
                 (WC.stop . fst)
-            $ const
-            $ threadDelay maxBound -- wait for Ctrl+C
+        liftIO $ threadDelay maxBound -- wait for Ctrl+C

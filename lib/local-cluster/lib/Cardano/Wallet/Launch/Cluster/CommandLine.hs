@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 
@@ -12,14 +13,25 @@ import Prelude
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
+import Cardano.Wallet.Network.Ports
+    ( validPorts
+    )
+import Control.Monad
+    ( unless
+    )
+import Network.Wai.Handler.Warp
+    ( Port
+    )
 import Options.Applicative
     ( Parser
+    , auto
     , execParser
     , help
     , helper
     , info
     , long
     , metavar
+    , option
     , optional
     , progDesc
     , strOption
@@ -30,6 +42,7 @@ data CommandLineOptions = CommandLineOptions
     { clusterConfigsDir :: FileOf "cluster-configs"
     , faucetFundsFile :: FileOf "faucet-funds"
     , clusterDir :: Maybe (FileOf "cluster")
+    , monitoringPort :: Port
     }
     deriving stock (Show)
 
@@ -41,6 +54,7 @@ parseCommandLineOptions =
                 <$> clusterConfigsDirParser
                 <*> faucetFundsParser
                 <*> clusterDirParser
+                <*> portParser
                 <**> helper
             )
             (progDesc "Local Cluster for testing")
@@ -64,10 +78,26 @@ faucetFundsParser =
             )
 
 clusterDirParser :: Parser (Maybe (FileOf "cluster"))
-clusterDirParser = optional $
-    FileOf
-        <$> strOption
-            ( long "cluster"
-                <> metavar "LOCAL_CLUSTER"
-                <> help "Path to the local cluster directory"
-            )
+clusterDirParser =
+    optional
+        $ FileOf
+            <$> strOption
+                ( long "cluster"
+                    <> metavar "LOCAL_CLUSTER"
+                    <> help "Path to the local cluster directory"
+                )
+
+portParser :: Parser Port
+portParser = do
+    option
+        parse
+        ( long "monitor-port"
+            <> metavar "MONITOR_PORT"
+            <> help "Port for the monitoring server"
+        )
+    where parse = do
+            p <- auto
+            unless (p `elem` validPorts) $
+                fail $ "Invalid port number. Must be inside: " ++
+                    show (head validPorts) ++ ".." ++ show (last validPorts)
+            pure p
