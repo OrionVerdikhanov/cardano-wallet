@@ -138,7 +138,8 @@ main = withUtf8 $ do
         clusterPath <-
             case clusterDir of
                 Just (FileOf path) -> pure path
-                Nothing -> ContT $ withSystemTempDir tr "test-cluster" skipCleanup
+                Nothing -> ContT
+                    $ withSystemTempDir tr "test-cluster" skipCleanup
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
