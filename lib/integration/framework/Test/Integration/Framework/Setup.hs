@@ -343,7 +343,7 @@ withServer
                             , cfgTracer = tr'
                             , cfgNodeOutputFile = nodeOutputFile
                             }
-                withCluster clusterConfig faucetFunds
+                withCluster (const $ pure ()) clusterConfig faucetFunds
                     $ onClusterStart
                         ctx
                         (onReady (T.pack smashUrl))

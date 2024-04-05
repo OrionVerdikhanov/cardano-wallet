@@ -67,7 +67,7 @@ import System.Directory
 withRelayNode
     :: NodeParams
     -- ^ Parameters used to generate config files.
-    -> (RunningNode -> IO a)
+    -> (RunningNode -> ClusterM a)
     -- ^ Callback function with socket path
     -> ClusterM a
 withRelayNode params onClusterStart = do
@@ -105,5 +105,6 @@ withRelayNode params onClusterStart = do
                     , nodeOutputFile = nodeParamsOutputFile params
                     }
 
-        let onClusterStart' socket = onClusterStart (RunningNode socket genesisData vd)
+        let onClusterStart' socket = onClusterStart
+                $ RunningNode socket genesisData vd
         withCardanoNodeProcess RelayNode cfg onClusterStart'
