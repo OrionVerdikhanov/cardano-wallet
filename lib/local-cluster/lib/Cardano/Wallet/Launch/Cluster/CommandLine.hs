@@ -1,11 +1,14 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     , clusterConfigsDirParser
+    , renderPullingMode
     ) where
 
 import Prelude
@@ -19,12 +22,16 @@ import Cardano.Wallet.Network.Ports
 import Control.Monad
     ( unless
     )
+import Control.Monitoring
+    ( MonitorState (..)
+    )
 import Network.Wai.Handler.Warp
     ( Port
     )
 import Options.Applicative
     ( Parser
     , auto
+    , eitherReader
     , execParser
     , help
     , helper
@@ -43,6 +50,7 @@ data CommandLineOptions = CommandLineOptions
     , faucetFundsFile :: FileOf "faucet-funds"
     , clusterDir :: Maybe (FileOf "cluster")
     , monitoringPort :: Port
+    , pullingMode :: MonitorState
     }
     deriving stock (Show)
 
@@ -55,6 +63,7 @@ parseCommandLineOptions =
                 <*> faucetFundsParser
                 <*> clusterDirParser
                 <*> portParser
+                <*> monitorStateParser
                 <**> helper
             )
             (progDesc "Local Cluster for testing")
@@ -91,13 +100,39 @@ portParser :: Parser Port
 portParser = do
     option
         parse
-        ( long "monitor-port"
-            <> metavar "MONITOR_PORT"
+        ( long "monitoring-port"
+            <> metavar "MONITORING_PORT"
             <> help "Port for the monitoring server"
         )
-    where parse = do
-            p <- auto
-            unless (p `elem` validPorts) $
-                fail $ "Invalid port number. Must be inside: " ++
-                    show (head validPorts) ++ ".." ++ show (last validPorts)
-            pure p
+  where
+    parse = do
+        p <- auto
+        unless (p `elem` validPorts)
+            $ fail
+            $ "Invalid port number. Must be inside: "
+                ++ show (head validPorts)
+                ++ ".."
+                ++ show (last validPorts)
+        pure p
+
+monitorStateParser :: Parser MonitorState
+monitorStateParser = do
+    option
+        parse
+        ( long "pulling-mode"
+            <> metavar "PULLING_MODE"
+            <> help "Mode for the monitoring server"
+        )
+  where
+    parse = eitherReader $ \case
+        "pulling" -> pure PullingState
+        "not-pulling" -> pure NotPullingState
+        _ ->
+            Left
+                "Invalid pulling mode. \
+                \ Must be either 'pulling' or 'not-pulling'"
+
+renderPullingMode :: MonitorState -> String
+renderPullingMode = \case
+    NotPullingState -> "not-pulling"
+    PullingState -> "pulling"
