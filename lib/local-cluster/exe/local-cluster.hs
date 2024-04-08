@@ -30,13 +30,6 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
-import Cardano.Wallet.Launch.Cluster.Control.Server
-    ( server
-    )
-import Cardano.Wallet.Launch.Cluster.Control.State
-    ( changeLayerPhase
-    , withControlLayer
-    )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
@@ -51,19 +44,23 @@ import Control.Lens
     )
 import Control.Monad
     ( void
-    , (<=<)
     )
 import Control.Monad.Cont
     ( ContT (..)
     )
 import Control.Monad.Trans
     ( MonadIO (..)
+    , MonadTrans (..)
+    )
+import Control.Monitoring
+import Data.Foldable
+    ( toList
+    )
+import Data.Time
+    ( getCurrentTime
     )
 import Main.Utf8
     ( withUtf8
-    )
-import Network.Wai.Handler.Warp
-    ( run
     )
 import Path
     ( parseAbsDir
@@ -82,14 +79,11 @@ import System.IO.Temp.Extra
     ( SkipCleanup (..)
     , withSystemTempDir
     )
-import UnliftIO
-    ( async
-    , link
-    )
 
 import qualified Cardano.Node.Cli.Launcher as NC
 import qualified Cardano.Wallet.Cli.Launcher as WC
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
+import qualified Control.Foldl as F
 
 -- |
 -- # OVERVIEW
@@ -167,8 +161,12 @@ main = withUtf8 $ do
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
-        monitoring <- withControlLayer
-        liftIO $ link <=< async $ server monitoring >>= run monitoringPort
+        -- a non-pulling tracer that traces integers and the time they were traced
+        -- and accumulates them in a set
+        c <- lift $
+                mkFoldingMonitor (liftIO getCurrentTime) F.set PullingState
+                    >>= mkMonitor
+        trace <- ContT $ runMonitor monitoringPort (fmap show . toList) c
         clusterPath <-
             case clusterDir of
                 Just (FileOf path) -> pure path
@@ -187,7 +185,7 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     }
-        node <- ContT $ Cluster.withCluster (changeLayerPhase monitoring)
+        node <- ContT $ Cluster.withCluster trace
             clusterCfg funds
         absClusterDir <- parseAbsDir clusterPath
         let walletDir = absClusterDir </> [reldir|wallet|]
