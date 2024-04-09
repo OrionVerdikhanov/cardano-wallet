@@ -2,6 +2,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 {-
 Control the launching of a cluster of nodes for testing purposes.
@@ -15,11 +16,11 @@ module Test.Integration.Framework.Cluster.Launch
 import Prelude
 
 import Cardano.Launcher
-    ( ProcessRun (..)
-    , withBackendCreateProcess
+    ( withBackendCreateProcess
     )
 import Cardano.Launcher.Node
-    ( cardanoNodeConn
+    ( CardanoNodeConn
+    , cardanoNodeConn
     , nodeSocketPath
     )
 import Cardano.Ledger.Shelley.API
@@ -49,9 +50,19 @@ import Cardano.Wallet.Launch.Cluster.Node.RunningNode
 import Control.Concurrent
     ( threadDelay
     )
+import Control.Monad
+    ( void
+    )
+import Control.Monad.Cont
+    ( ContT (..)
+    )
+import Control.Monad.Trans
+    ( lift
+    )
 import Control.Monitoring
     ( MonitorState
     )
+import Data.Aeson (FromJSON)
 import Data.Functor.Contravariant
     ( (>$<)
     )
@@ -112,6 +123,29 @@ localClusterProcess CommandLineOptions{..} era = do
                     , pathOf clusterDir'
                     ]
 
+withFaucetFunds
+    :: HasCallStack
+    => FaucetFunds
+    -> ContT r IO (FileOf s)
+withFaucetFunds faucetFunds = ContT $ \action ->
+    withTempFile $ \faucetFundsPath -> do
+        saveFunds faucetFundsPath faucetFunds
+        action $ FileOf faucetFundsPath
+
+withSocketPath
+    :: HasCallStack
+    => FileOf s
+    -> ContT r m CardanoNodeConn
+withSocketPath cfgClusterDir = ContT $ \f ->
+    case cardanoNodeConn $ nodeSocketPath $ pathOf cfgClusterDir of
+        Left err -> error $ "Failed to get socket path: " ++ err
+        Right socketPath -> f socketPath
+
+withGenesisData :: FromJSON a => FilePath -> ContT r IO a
+withGenesisData shelleyGenesis = ContT $ \f -> do
+    genesisData <- BS.readFile shelleyGenesis >>= Aeson.throwDecodeStrict
+    f genesisData
+
 withLocalCluster
     :: HasCallStack
     => Int
@@ -125,38 +159,42 @@ withLocalCluster
     -> (RunningNode -> IO a)
     -- ^ Action to run once when all pools have started.
     -> IO a
-withLocalCluster monitoringPort initialPullingState Config{..} faucetFunds run = do
-    withTempFile $ \faucetFundsPath -> do
-        saveFunds faucetFundsPath faucetFunds
-        let faucetFundsFile = FileOf faucetFundsPath
+withLocalCluster
+    monitoringPort
+    initialPullingState
+    Config{..}
+    faucetFunds
+    action = do
+        let
             clusterConfigsDir = cfgClusterConfigs
             shelleyGenesis = pathOf cfgClusterDir </> "shelley-genesis.json"
             clusterDir = Just cfgClusterDir
             pullingMode = initialPullingState
-        case cardanoNodeConn $ nodeSocketPath $ pathOf cfgClusterDir of
-            Left err -> error $ "Failed to get socket path: " ++ err
-            Right socketPath -> do
-                cp <- localClusterProcess CommandLineOptions{..} cfgLastHardFork
-                withBackendCreateProcess
+        flip runContT pure $ do
+            faucetFundsFile <- withFaucetFunds faucetFunds
+            socketPath <- withSocketPath cfgClusterDir
+            cp <-
+                lift
+                    $ localClusterProcess
+                        CommandLineOptions{..}
+                        cfgLastHardFork
+            void
+                $ ContT
+                $ withBackendCreateProcess
                     (MsgLauncher "local-cluster" >$< cfgTracer)
                     cp
-                    $ ProcessRun
-                    $ \_ _mout _merr _ -> do
-                        threadDelay 10_000_000 -- when the cluster is ready ?
-                        genesisData <-
-                            BS.readFile shelleyGenesis
-                                >>= Aeson.throwDecodeStrict
-                        let networkMagic =
+            lift $ threadDelay 10_000_000 -- when the cluster is ready ?
+            genesisData <- withGenesisData shelleyGenesis
+            lift
+                $ action
+                $ RunningNode
+                    { runningNodeSocketPath = socketPath
+                    , runningNodeShelleyGenesis = genesisData
+                    , runningNodeVersionData =
+                        NodeToClientVersionData
+                            { networkMagic =
                                 NetworkMagic
                                     $ sgNetworkMagic genesisData
-                            runningNode =
-                                RunningNode
-                                    { runningNodeSocketPath = socketPath
-                                    , runningNodeShelleyGenesis = genesisData
-                                    , runningNodeVersionData =
-                                        NodeToClientVersionData
-                                            { networkMagic
-                                            , query = False
-                                            }
-                                    }
-                        run runningNode
+                            , query = False
+                            }
+                    }
