@@ -49,9 +49,6 @@ import Cardano.Wallet.Launch.Cluster.Node.RunningNode
 import Control.Concurrent
     ( threadDelay
     )
-import Control.Exception
-    ( throwIO
-    )
 import Control.Monitoring
     ( MonitorState
     )
@@ -129,7 +126,7 @@ withLocalCluster
     -- ^ Action to run once when all pools have started.
     -> IO a
 withLocalCluster monitoringPort initialPullingState Config{..} faucetFunds run = do
-    r <- withTempFile $ \faucetFundsPath -> do
+    withTempFile $ \faucetFundsPath -> do
         saveFunds faucetFundsPath faucetFunds
         let faucetFundsFile = FileOf faucetFundsPath
             clusterConfigsDir = cfgClusterConfigs
@@ -163,4 +160,3 @@ withLocalCluster monitoringPort initialPullingState Config{..} faucetFunds run =
                                             }
                                     }
                         run runningNode
-    either throwIO pure r
