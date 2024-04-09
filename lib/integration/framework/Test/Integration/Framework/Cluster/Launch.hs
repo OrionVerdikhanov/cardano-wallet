@@ -62,7 +62,9 @@ import Control.Monad.Trans
 import Control.Monitoring
     ( MonitorState
     )
-import Data.Aeson (FromJSON)
+import Data.Aeson
+    ( FromJSON
+    )
 import Data.Functor.Contravariant
     ( (>$<)
     )

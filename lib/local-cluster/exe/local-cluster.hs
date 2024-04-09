@@ -2,22 +2,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 import Prelude
 
 import Cardano.BM.Extra
     ( stdoutTextTracer
-    )
-import Cardano.Launcher.Node
-    ( nodeSocketFile
     )
 import Cardano.Startup
     ( installSignalHandlers
@@ -25,6 +17,9 @@ import Cardano.Startup
     )
 import Cardano.Wallet.Faucet.Yaml
     ( retrieveFunds
+    )
+import Cardano.Wallet.Launch.Cluster
+    ( Config (..)
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
@@ -38,9 +33,6 @@ import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     )
 import Control.Concurrent
     ( threadDelay
-    )
-import Control.Exception
-    ( bracket
     )
 import Control.Lens
     ( over
@@ -57,16 +49,6 @@ import Control.Monad.Trans
 import Main.Utf8
     ( withUtf8
     )
-import Path
-    ( parseAbsDir
-    , parseAbsFile
-    , reldir
-    , relfile
-    , (</>)
-    )
-import Path.IO
-    ( createDirIfMissing
-    )
 import System.Environment.Extended
     ( isEnvSet
     )
@@ -75,8 +57,6 @@ import System.IO.Temp.Extra
     , withSystemTempDir
     )
 
-import qualified Cardano.Node.Cli.Launcher as NC
-import qualified Cardano.Wallet.Cli.Launcher as WC
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
 
 -- |
@@ -175,28 +155,6 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     }
-        node <- ContT $ Cluster.withCluster trace clusterCfg funds
-        absClusterDir <- parseAbsDir clusterPath
-        let walletDir = absClusterDir </> [reldir|wallet|]
-        createDirIfMissing False walletDir
-        nodeSocket <-
-            parseAbsFile . nodeSocketFile
-                $ Cluster.runningNodeSocketPath node
-        let walletProcessConfig =
-                WC.WalletProcessConfig
-                    { WC.walletDir
-                    , WC.walletNodeApi = NC.NodeApi nodeSocket
-                    , WC.walletDatabase = absClusterDir Path.</> [Path.reldir|db|]
-                    , WC.walletListenHost = Nothing
-                    , WC.walletListenPort = Nothing
-                    , WC.walletByronGenesisForTestnet =
-                        Just
-                            $ absClusterDir
-                                </> [relfile|genesis-byron.json|]
-                    }
-        void
-            $ ContT
-            $ bracket
-                (WC.start walletProcessConfig)
-                (WC.stop . fst)
+        void $ ContT $ Cluster.withCluster trace clusterCfg funds
+
         liftIO $ threadDelay maxBound -- wait for Ctrl+C
