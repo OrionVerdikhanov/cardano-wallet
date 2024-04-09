@@ -85,6 +85,7 @@ data TestsLog
     | MsgCluster ClusterLog
     | MsgPoolGarbageCollectionEvent PoolGarbageCollectionEvent
     | MsgServerError SomeException
+    | MsgInfo Text
     deriving (Show)
 
 instance ToText TestsLog where
@@ -116,6 +117,7 @@ instance ToText TestsLog where
             | isAsyncException (SomeException e)
                 -> "Server thread cancelled: " <> T.pack (show e)
             | otherwise -> T.pack (show e)
+        MsgInfo msg -> msg
 
 instance HasPrivacyAnnotation TestsLog
 instance HasSeverityAnnotation TestsLog where
@@ -128,6 +130,7 @@ instance HasSeverityAnnotation TestsLog where
         MsgServerError e
             | isAsyncException e -> Notice
             | otherwise -> Warning
+        MsgInfo _ -> Info
 
 withTracers
     :: FilePath
@@ -145,7 +148,6 @@ withTracers testDir action = do
 
     walletLogOutputs <- getLogOutputs walletMinSeverityFromEnv "wallet.log"
     testLogOutputs <- getLogOutputs testMinSeverityFromEnv "test.log"
-
     withLogging walletLogOutputs $ \(sb, (cfg, walTr)) -> do
         ekgEnabled >>= flip when (EKG.plugin cfg walTr sb >>= loadPlugin sb)
         withLogging testLogOutputs $ \(_, (_, testTr)) -> do

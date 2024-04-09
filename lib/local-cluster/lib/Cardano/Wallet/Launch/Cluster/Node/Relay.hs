@@ -67,12 +67,12 @@ import System.Directory
 withRelayNode
     :: NodeParams
     -- ^ Parameters used to generate config files.
+    -> NodePathSegment
+    -- ^ Path segment for the node to add to the cluster directory.
     -> (RunningNode -> ClusterM a)
     -- ^ Callback function with socket path
     -> ClusterM a
-withRelayNode params onClusterStart = do
-    let name = "node"
-        nodeSegment = NodePathSegment name
+withRelayNode params nodeSegment@(NodePathSegment name) onClusterStart = do
     nodeDir' <- askNodeDir nodeSegment
     let NodeParams genesisFiles hardForks (port, peers) logCfg _ = params
     bracketTracer' "withRelayNode" $ do

@@ -25,6 +25,9 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
+import Cardano.Wallet.Launch.Cluster.Config
+    ( NodePathSegment (NodePathSegment)
+    )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
@@ -154,6 +157,7 @@ main = withUtf8 $ do
                     , cfgShelleyGenesisMods = [over #sgSlotLength \_ -> 0.2]
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
+                    , cfgRelayNodePath = NodePathSegment "relay"
                     }
         void $ ContT $ Cluster.withCluster trace clusterCfg funds
 

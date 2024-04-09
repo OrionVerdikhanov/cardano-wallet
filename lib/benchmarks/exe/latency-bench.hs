@@ -95,6 +95,9 @@ import Cardano.Wallet.Launch.Cluster
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( clusterConfigsDirParser
     )
+import Cardano.Wallet.Launch.Cluster.Config
+    ( NodePathSegment (..)
+    )
 import Cardano.Wallet.Network.Implementation.Ouroboros
     ( tunedForMainnetPipeliningStrategy
     )
@@ -663,6 +666,7 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
                             ]
                         , cfgTracer = stdoutTextTracer
                         , cfgNodeOutputFile = Nothing
+                        , cfgRelayNodePath = NodePathSegment "relay"
                         }
             withCluster
                 nullTracer

@@ -67,9 +67,11 @@ import Cardano.Wallet.Launch.Cluster
     , clusterEraFromEnv
     , runClusterM
     , sendFaucetAssetsTo
-    , withCluster
     , withFaucet
     , withSMASH
+    )
+import Cardano.Wallet.Launch.Cluster.Config
+    ( NodePathSegment (..)
     )
 import Cardano.Wallet.Launch.Cluster.Env
     ( nodeOutputFileFromEnv
@@ -119,10 +121,12 @@ import Control.Monad
 import Control.Monad.IO.Class
     ( liftIO
     )
+import Control.Monitoring.Monitor
+    ( MonitorState (..)
+    )
 import Control.Tracer
     ( Tracer (..)
     , contramap
-    , nullTracer
     , traceWith
     )
 import Data.Either.Combinators
@@ -174,6 +178,9 @@ import System.FilePath
 import System.IO.Temp.Extra
     ( SkipCleanup (..)
     , withSystemTempDir
+    )
+import Test.Integration.Framework.Cluster.Launch
+    ( withLocalCluster
     )
 import Test.Integration.Framework.Context
     ( Context (..)
@@ -231,6 +238,7 @@ withTestsSetup action = do
     skipCleanup <- SkipCleanup <$> isEnvSet "NO_CLEANUP"
     -- Flush test output as soon as a line is printed.
     -- Set UTF-8, regardless of user locale.
+
     withUtf8
         $
         -- This temporary directory will contain logs, and all other data
@@ -331,6 +339,7 @@ withServer
         bracketTracer' tr "withServer" $ do
             let tr' = contramap MsgCluster tr
             era <- clusterEraFromEnv
+            traceWith tr $ MsgInfo "Starting SMASH server ..."
             withSMASH tr' testDir $ \smashUrl -> do
                 let clusterConfig =
                         Cluster.Config
@@ -343,8 +352,10 @@ withServer
                             , cfgShelleyGenesisMods = []
                             , cfgTracer = tr'
                             , cfgNodeOutputFile = nodeOutputFile
+                            , cfgRelayNodePath = NodePathSegment "relay"
                             }
-                withCluster nullTracer clusterConfig faucetFunds
+                traceWith tr $ MsgInfo "Starting local cluster ..."
+                withLocalCluster 6_080 NotPullingState clusterConfig faucetFunds
                     $ onClusterStart
                         ctx
                         (onReady (T.pack smashUrl))
@@ -367,8 +378,12 @@ onClusterStart
         createDirectory db
         listen <- walletListenFromEnv envFromText
         let testMetadata = pathOf testDataDir </> "token-metadata.json"
+        traceWith tr $ MsgInfo "Starting metadata server ..."
         withMetadataServer (queryServerStatic testMetadata) $ \tokenMetaUrl -> do
-            serveWallet
+            traceWith tr $ MsgInfo $ "Starting wallet server over "
+                <> T.pack (show nodeConnection)
+            flip withException (traceWith tr . MsgServerError) $
+              serveWallet
                 (NodeSource nodeConnection vData (SyncTolerance 10))
                 networkParameters
                 tunedForMainnetPipeliningStrategy
@@ -383,9 +398,9 @@ onClusterStart
                 Nothing
                 (Just tokenMetaUrl)
                 block0
-                (callback nodeConnection networkParameters)
-                `withException` (traceWith tr . MsgServerError)
-
+                        $ \uri -> do
+                            traceWith tr $ MsgInfo "Wallet ready"
+                            callback nodeConnection networkParameters uri
 -- threadDelay $ 3 * 60 * 1_000_000 -- Wait 3 minutes for the node to start
 -- exitSuccess
 
@@ -407,8 +422,8 @@ httpManager = do
 setupContext
     :: TestingCtx
     -> MVar Context
-
-    -> ClientEnv -- ^ Faucet client environment
+    -> ClientEnv
+    -- ^ Faucet client environment
     -> IORef [PoolGarbageCollectionEvent]
     -> Maybe (FileOf "node-output")
     -> T.Text
@@ -454,8 +469,9 @@ setupContext
                             , cfgShelleyGenesisMods = []
                             , cfgTracer = tr'
                             , cfgNodeOutputFile = nodeOutputFile
+                            , cfgRelayNodePath = NodePathSegment "relay"
                             }
-
+            traceWith tr $ MsgInfo "Context set up."
             putMVar
                 ctx
                 Context
@@ -480,10 +496,12 @@ setupContext
 withContext :: TestingCtx -> (Context -> IO ()) -> IO ()
 withContext testingCtx@TestingCtx{..} action = do
     bracketTracer' tr "withContext" $ withFaucet $ \faucetClientEnv -> do
+        traceWith tr $ MsgInfo "Setting up context..."
         ctx <- newEmptyMVar
         nodeOutputFile <- nodeOutputFileFromEnv
         clusterConfigs <- Cluster.localClusterConfigsFromEnv
         poolGarbageCollectionEvents <- newIORef []
+        traceWith tr $ MsgInfo "Getting faucet funds..."
         faucetFunds <- runFaucetM faucetClientEnv $ mkFaucetFunds testnetMagic
 
         let dbEventRecorder =
@@ -491,27 +509,31 @@ withContext testingCtx@TestingCtx{..} action = do
                     testingCtx
                     poolGarbageCollectionEvents
             cluster =
-                setupContext
-                    testingCtx
-                    ctx
-                    faucetClientEnv
-                    poolGarbageCollectionEvents
-                    nodeOutputFile
-        res <-
-            race
-                ( withServer
+                withServer
                     testingCtx
                     clusterConfigs
                     faucetFunds
                     dbEventRecorder
                     nodeOutputFile
-                    cluster
-                )
-                (takeMVar ctx >>= bracketTracer' tr "spec" .
-                    (\c -> setupDelegation faucetClientEnv c >> action c))
+                    $ setupContext
+                        testingCtx
+                        ctx
+                        faucetClientEnv
+                        poolGarbageCollectionEvents
+                        nodeOutputFile
+            test = do
+                traceWith tr $ MsgInfo "Waiting for cluster to start..."
+                c <- takeMVar ctx
+                bracketTracer' tr "spec" $ do
+                    traceWith tr $ MsgInfo "Setting up delegation.."
+                    setupDelegation faucetClientEnv c
+                    traceWith tr $ MsgInfo "Running tests..."
+                    action c
+                    traceWith tr $ MsgInfo "Tests done."
+        res <- race cluster test
         whenLeft res (throwIO . ProcessHasExited "integration")
   where
-    -- | Setup delegation for 'rewardWallet' / 'rewardWalletMnemonics'.
+    -- \| Setup delegation for 'rewardWallet' / 'rewardWalletMnemonics'.
     --
     -- Rewards take 4-5 epochs (here ~2 min) to accrue from delegating. By
     -- doing this up-front, the rewards are likely available by the time
@@ -530,7 +552,8 @@ withContext testingCtx@TestingCtx{..} action = do
         -- resources for unnecessary restoration.
         forM_ mnemonics $ \mw -> runResourceT $ do
             w <- walletFromMnemonic ctx mw
-            _ <- joinStakePool
+            _ <-
+                joinStakePool
                 @('Testnet 0) -- protocol magic doesn't matter
                 ctx
                 (SpecificPool pool)

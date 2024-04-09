@@ -78,7 +78,7 @@ integration-tests-cabal-match match:
 
 # run any integration test matching the given pattern via cabal
 integration-tests-cabal-options options:
-  TESTS_TRACING_MIN_SEVERITY=Warning \
+  TESTS_TRACING_MIN_SEVERITY=info \
   LOCAL_CLUSTER_NODE_OUTPUT_FILE=/dev/null \
   LOCAL_CLUSTER_CONFIGS=../../lib/local-cluster/test/data/cluster-configs \
   CARDANO_WALLET_TEST_DATA=../../lib/integration/test/data \
@@ -114,6 +114,7 @@ integration-tests match:
     '.#cardano-cli' \
     '.#cardano-wallet' \
     '.#integration-exe' \
+    '.#local-cluster' \
     -c integration-exe -j 2 --match="{{match}}"
 
 # run babbage integration tests matching the given pattern via nix

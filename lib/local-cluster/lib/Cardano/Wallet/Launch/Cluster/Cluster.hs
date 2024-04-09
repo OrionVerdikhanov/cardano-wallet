@@ -250,7 +250,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                         ContT
                             $ launchPools others genesisFiles poolPorts runningPool0
                     phase Relay
-                    c <- ContT $ withRelayNode relayNodeParams
+                    c <- ContT $ withRelayNode relayNodeParams cfgRelayNodePath
                     phase $ Cluster $ Just $ RelayNode $ runningNodeSocketPath c
                     liftIO $ onClusterStart c
   where

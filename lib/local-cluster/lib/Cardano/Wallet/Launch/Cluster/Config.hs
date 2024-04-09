@@ -68,8 +68,9 @@ data Config = Config
     -- ^ Tracer for logging.
     , cfgNodeOutputFile :: Maybe (FileOf "node-output")
     -- ^ File to write node output to.
+    , cfgRelayNodePath :: NodePathSegment
     }
 
-newtype NodePathSegment = NodePathSegment FilePath
+newtype NodePathSegment = NodePathSegment {pathOfNodePathSegment :: FilePath}
     deriving stock (Show)
     deriving newtype (Eq, Ord)

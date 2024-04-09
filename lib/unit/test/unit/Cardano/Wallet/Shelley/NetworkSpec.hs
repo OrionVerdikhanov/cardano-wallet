@@ -29,6 +29,9 @@ import Cardano.Wallet.Launch.Cluster
     , localClusterConfigsFromEnv
     , withCluster
     )
+import Cardano.Wallet.Launch.Cluster.Config
+    ( NodePathSegment (..)
+    )
 import Cardano.Wallet.Network
     ( NetworkLayer (..)
     )
@@ -326,6 +329,7 @@ withTestNode tr action = do
                     , cfgShelleyGenesisMods = []
                     , cfgTracer = tr
                     , cfgNodeOutputFile = Nothing
+                    , cfgRelayNodePath = NodePathSegment "relay"
                     }
             withCluster nullTracer clusterConfig (FaucetFunds [] [] []) $
                 \(RunningNode sock genesisData vData) -> do

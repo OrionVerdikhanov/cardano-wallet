@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
+
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 {-
@@ -40,9 +40,11 @@ import Cardano.Wallet.Launch.Cluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
+    , renderPullingMode
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
+    , NodePathSegment (pathOfNodePathSegment)
     )
 import Cardano.Wallet.Launch.Cluster.Node.RunningNode
     ( RunningNode (..)
@@ -55,6 +57,7 @@ import Control.Monad
     )
 import Control.Monad.Cont
     ( ContT (..)
+    , evalContT
     )
 import Control.Monad.Trans
     ( lift
@@ -108,8 +111,8 @@ localClusterProcess CommandLineOptions{..} era = do
         $ (proc "local-cluster" args)
             { env = Just $ myEnv ++ envs
             , -- , cwd = Just $ nodeDir cfg
-              std_out = CreatePipe
-            , std_err = CreatePipe
+              std_out = Inherit
+            , std_err = Inherit
             }
   where
     args =
@@ -117,6 +120,10 @@ localClusterProcess CommandLineOptions{..} era = do
         , pathOf clusterConfigsDir
         , "--faucet-funds"
         , pathOf faucetFundsFile
+        , "--monitoring-port"
+        , show monitoringPort
+        , "--pulling-mode"
+        , renderPullingMode pullingMode
         ]
             <> case clusterDir of
                 Nothing -> []
@@ -169,12 +176,14 @@ withLocalCluster
     action = do
         let
             clusterConfigsDir = cfgClusterConfigs
+            relayDir = pathOf cfgClusterDir
+                </> pathOfNodePathSegment cfgRelayNodePath
             shelleyGenesis = pathOf cfgClusterDir </> "shelley-genesis.json"
             clusterDir = Just cfgClusterDir
             pullingMode = initialPullingState
-        flip runContT pure $ do
+        evalContT $ do
             faucetFundsFile <- withFaucetFunds faucetFunds
-            socketPath <- withSocketPath cfgClusterDir
+            socketPath <- withSocketPath $ FileOf relayDir
             cp <-
                 lift
                     $ localClusterProcess
