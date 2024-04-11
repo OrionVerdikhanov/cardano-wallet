@@ -315,10 +315,9 @@ recordPoolGarbageCollectionEvents TestingCtx{..} eventsRef =
 
 withServer
     :: TestingCtx
-    -> FileOf "cluster-configs"
+    -> Cluster.Config
     -> FaucetFunds
     -> Pool.DBDecorator IO
-    -> Maybe (FileOf "node-output")
     -> ( T.Text
          -> CardanoNodeConn
          -> NetworkParameters
@@ -328,32 +327,14 @@ withServer
     -> IO ExitCode
 withServer
     ctx@TestingCtx{..}
-    clusterConfigs
+    clusterConfig
     faucetFunds
     dbDecorator
-    nodeOutputFile
     onReady =
         bracketTracer' tr "withServer" $ do
-            let tr' = contramap MsgCluster tr
-            era <- clusterEraFromEnv
+            let tr' = Cluster.cfgTracer clusterConfig
             traceWith tr $ MsgInfo "Starting SMASH server ..."
             withSMASH tr' testDir $ \smashUrl -> do
-                let clusterConfig =
-                        Cluster.Config
-                            { cfgStakePools = Cluster.defaultPoolConfigs
-                            , cfgLastHardFork = era
-                            , cfgNodeLogging = LogFileConfig Info Nothing Info
-                            , cfgClusterDir = FileOf @"cluster" testDir
-                            , cfgClusterConfigs = clusterConfigs
-                            , cfgTestnetMagic = testnetMagic
-                            , cfgShelleyGenesisMods = []
-                            , cfgTracer = tr'
-                            , cfgNodeOutputFile = nodeOutputFile
-                            , cfgRelayNodePath = NodePathSegment "relay"
-                            , cfgClusterLogFile = Just
-                                $ FileOf @"cluster-logs"
-                                $ testDir </> "cluster.logs"
-                            }
                 traceWith tr $ MsgInfo "Starting local cluster ..."
                 withLocalCluster Nothing clusterConfig faucetFunds
                     $ onClusterStart
@@ -380,27 +361,30 @@ onClusterStart
         let testMetadata = pathOf testDataDir </> "token-metadata.json"
         traceWith tr $ MsgInfo "Starting metadata server ..."
         withMetadataServer (queryServerStatic testMetadata) $ \tokenMetaUrl -> do
-            traceWith tr $ MsgInfo $ "Starting wallet server over "
-                <> T.pack (show nodeConnection)
-            flip withException (traceWith tr . MsgServerError) $
-              serveWallet
-                (NodeSource nodeConnection vData (SyncTolerance 10))
-                networkParameters
-                tunedForMainnetPipeliningStrategy
-                (NTestnet (fromIntegral (sgNetworkMagic genesisData)))
-                genesisPools
-                tracers
-                (Just db)
-                (Just dbDecorator)
-                "127.0.0.1"
-                listen
-                Nothing
-                Nothing
-                (Just tokenMetaUrl)
-                block0
-                        $ \uri -> do
-                            traceWith tr $ MsgInfo "Wallet ready"
-                            callback nodeConnection networkParameters uri
+            traceWith tr
+                $ MsgInfo
+                $ "Starting wallet server over "
+                    <> T.pack (show nodeConnection)
+            flip withException (traceWith tr . MsgServerError)
+                $ serveWallet
+                    (NodeSource nodeConnection vData (SyncTolerance 10))
+                    networkParameters
+                    tunedForMainnetPipeliningStrategy
+                    (NTestnet (fromIntegral (sgNetworkMagic genesisData)))
+                    genesisPools
+                    tracers
+                    (Just db)
+                    (Just dbDecorator)
+                    "127.0.0.1"
+                    listen
+                    Nothing
+                    Nothing
+                    (Just tokenMetaUrl)
+                    block0
+                $ \uri -> do
+                    traceWith tr $ MsgInfo "Wallet ready"
+                    callback nodeConnection networkParameters uri
+
 -- threadDelay $ 3 * 60 * 1_000_000 -- Wait 3 minutes for the node to start
 -- exitSuccess
 
@@ -421,11 +405,11 @@ httpManager = do
 
 setupContext
     :: TestingCtx
+    -> Cluster.Config
     -> MVar Context
     -> ClientEnv
     -- ^ Faucet client environment
     -> IORef [PoolGarbageCollectionEvent]
-    -> Maybe (FileOf "node-output")
     -> T.Text
     -> CardanoNodeConn
     -> NetworkParameters
@@ -433,18 +417,16 @@ setupContext
     -> IO ()
 setupContext
     TestingCtx{..}
+    clusterConfig
     ctx
     faucetClientEnv
     poolGarbageCollectionEvents
-    nodeOutputFile
     smashUrl
     nodeConnection
     networkParameters
     baseUrl =
         bracketTracer' tr "setupContext" $ do
-            clusterConfigs <- Cluster.localClusterConfigsFromEnv
             faucet <- Faucet.initFaucet faucetClientEnv
-            let tr' = contramap MsgCluster tr
             prometheusUrl <-
                 let packPort (h, p) =
                         T.pack h <> ":" <> toText @(Port "Prometheus") p
@@ -457,23 +439,6 @@ setupContext
             manager <- httpManager
             mintSeaHorseAssetsLock <- newMVar ()
 
-            let withConfig =
-                    runClusterM
-                        $ Cluster.Config
-                            { cfgStakePools = error "cfgStakePools: unused"
-                            , cfgLastHardFork = localClusterEra
-                            , cfgNodeLogging = error "cfgNodeLogging: unused"
-                            , cfgClusterDir = FileOf @"cluster" testDir
-                            , cfgClusterConfigs = clusterConfigs
-                            , cfgTestnetMagic = testnetMagic
-                            , cfgShelleyGenesisMods = []
-                            , cfgTracer = tr'
-                            , cfgNodeOutputFile = nodeOutputFile
-                            , cfgRelayNodePath = NodePathSegment "relay"
-                            , cfgClusterLogFile = Just
-                                $ FileOf @"cluster-logs"
-                                $ testDir </> "cluster.logs"
-                            }
             traceWith tr $ MsgInfo "Context set up."
             putMVar
                 ctx
@@ -489,7 +454,7 @@ setupContext
                     , _smashUrl = smashUrl
                     , _mintSeaHorseAssets = \nPerAddr batchSize c addrs ->
                         withMVar mintSeaHorseAssetsLock $ \() ->
-                            withConfig
+                            runClusterM clusterConfig
                                 $ sendFaucetAssetsTo
                                     nodeConnection
                                     batchSize
@@ -506,7 +471,24 @@ withContext testingCtx@TestingCtx{..} action = do
         poolGarbageCollectionEvents <- newIORef []
         traceWith tr $ MsgInfo "Getting faucet funds..."
         faucetFunds <- runFaucetM faucetClientEnv $ mkFaucetFunds testnetMagic
-
+        era <- clusterEraFromEnv
+        let clusterConfig =
+                Cluster.Config
+                    { cfgStakePools = Cluster.defaultPoolConfigs
+                    , cfgLastHardFork = era
+                    , cfgNodeLogging = LogFileConfig Info Nothing Info
+                    , cfgClusterDir = FileOf @"cluster" testDir
+                    , cfgClusterConfigs = clusterConfigs
+                    , cfgTestnetMagic = testnetMagic
+                    , cfgShelleyGenesisMods = []
+                    , cfgTracer = contramap MsgCluster tr
+                    , cfgNodeOutputFile = nodeOutputFile
+                    , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgClusterLogFile =
+                        Just
+                            $ FileOf @"cluster-logs"
+                            $ testDir </> "cluster.logs"
+                    }
         let dbEventRecorder =
                 recordPoolGarbageCollectionEvents
                     testingCtx
@@ -514,16 +496,15 @@ withContext testingCtx@TestingCtx{..} action = do
             cluster =
                 withServer
                     testingCtx
-                    clusterConfigs
+                    clusterConfig
                     faucetFunds
                     dbEventRecorder
-                    nodeOutputFile
                     $ setupContext
                         testingCtx
+                        clusterConfig
                         ctx
                         faucetClientEnv
                         poolGarbageCollectionEvents
-                        nodeOutputFile
             test = do
                 traceWith tr $ MsgInfo "Waiting for cluster to start..."
                 c <- takeMVar ctx
@@ -557,10 +538,10 @@ withContext testingCtx@TestingCtx{..} action = do
             w <- walletFromMnemonic ctx mw
             _ <-
                 joinStakePool
-                @('Testnet 0) -- protocol magic doesn't matter
-                ctx
-                (SpecificPool pool)
-                (w, fixturePassphrase)
+                    @('Testnet 0) -- protocol magic doesn't matter
+                    ctx
+                    (SpecificPool pool)
+                    (w, fixturePassphrase)
             pure ()
 
 bracketTracer' :: Tracer IO TestsLog -> Text -> IO a -> IO a
