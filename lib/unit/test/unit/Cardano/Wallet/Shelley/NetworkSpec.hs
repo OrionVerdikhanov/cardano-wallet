@@ -330,6 +330,7 @@ withTestNode tr action = do
                     , cfgTracer = tr
                     , cfgNodeOutputFile = Nothing
                     , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgClusterLogFile = Nothing
                     }
             withCluster nullTracer clusterConfig (FaucetFunds [] [] []) $
                 \(RunningNode sock genesisData vData) -> do

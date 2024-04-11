@@ -353,6 +353,9 @@ withServer
                             , cfgTracer = tr'
                             , cfgNodeOutputFile = nodeOutputFile
                             , cfgRelayNodePath = NodePathSegment "relay"
+                            , cfgClusterLogFile = Just
+                                $ FileOf @"cluster-logs"
+                                $ testDir </> "cluster.logs"
                             }
                 traceWith tr $ MsgInfo "Starting local cluster ..."
                 withLocalCluster 6_080 NotPullingState clusterConfig faucetFunds
@@ -470,6 +473,9 @@ setupContext
                             , cfgTracer = tr'
                             , cfgNodeOutputFile = nodeOutputFile
                             , cfgRelayNodePath = NodePathSegment "relay"
+                            , cfgClusterLogFile = Just
+                                $ FileOf @"cluster-logs"
+                                $ testDir </> "cluster.logs"
                             }
             traceWith tr $ MsgInfo "Context set up."
             putMVar

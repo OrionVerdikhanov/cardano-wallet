@@ -87,7 +87,9 @@ import System.FilePath
     ( (</>)
     )
 import System.IO.Extra
-    ( withTempFile
+    ( IOMode (..)
+    , withFile
+    , withTempFile
     )
 import System.Process.Extra
     ( CreateProcess (..)
@@ -101,18 +103,24 @@ import qualified Data.ByteString as BS
 localClusterProcess
     :: CommandLineOptions
     -> ClusterEra
-    -> IO CreateProcess
+    -> ContT r IO CreateProcess
 localClusterProcess CommandLineOptions{..} era = do
-    myEnv <- getEnvironment
+    myEnv <- lift getEnvironment
+
     let envs =
             [ ("LOCAL_CLUSTER_ERA", clusterEraToString era)
             ]
+    output <- case clusterLogs of
+            Nothing -> pure Inherit
+            Just (FileOf logFile) ->
+                fmap UseHandle
+                    $ ContT $ withFile logFile WriteMode
     pure
         $ (proc "local-cluster" args)
             { env = Just $ myEnv ++ envs
             , -- , cwd = Just $ nodeDir cfg
-              std_out = Inherit
-            , std_err = Inherit
+              std_out = output
+            , std_err = output
             }
   where
     args =
@@ -181,14 +189,11 @@ withLocalCluster
             shelleyGenesis = pathOf cfgClusterDir </> "shelley-genesis.json"
             clusterDir = Just cfgClusterDir
             pullingMode = initialPullingState
+            clusterLogs = cfgClusterLogFile
         evalContT $ do
             faucetFundsFile <- withFaucetFunds faucetFunds
             socketPath <- withSocketPath $ FileOf relayDir
-            cp <-
-                lift
-                    $ localClusterProcess
-                        CommandLineOptions{..}
-                        cfgLastHardFork
+            cp <- localClusterProcess CommandLineOptions{..} cfgLastHardFork
             void
                 $ ContT
                 $ withBackendCreateProcess

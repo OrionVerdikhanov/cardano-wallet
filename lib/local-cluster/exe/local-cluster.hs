@@ -135,6 +135,7 @@ main = withUtf8 $ do
         , clusterDir
         , monitoringPort
         , pullingMode
+        , clusterLogs
         } <-
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
@@ -158,6 +159,7 @@ main = withUtf8 $ do
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
                     , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgClusterLogFile = clusterLogs
                     }
         void $ ContT $ Cluster.withCluster trace clusterCfg funds
 

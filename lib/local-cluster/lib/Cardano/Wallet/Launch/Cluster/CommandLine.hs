@@ -51,6 +51,7 @@ data CommandLineOptions = CommandLineOptions
     , clusterDir :: Maybe (FileOf "cluster")
     , monitoringPort :: Port
     , pullingMode :: MonitorState
+    , clusterLogs :: Maybe (FileOf "cluster-logs")
     }
     deriving stock (Show)
 
@@ -64,6 +65,7 @@ parseCommandLineOptions =
                 <*> clusterDirParser
                 <*> portParser
                 <*> monitorStateParser
+                <*> clusterLogsParser
                 <**> helper
             )
             (progDesc "Local Cluster for testing")
@@ -136,3 +138,13 @@ renderPullingMode :: MonitorState -> String
 renderPullingMode = \case
     NotPullingState -> "not-pulling"
     PullingState -> "pulling"
+
+clusterLogsParser :: Parser (Maybe (FileOf "cluster-logs"))
+clusterLogsParser =
+    optional
+        $ FileOf
+            <$> strOption
+                ( long "cluster-logs"
+                    <> metavar "LOCAL_CLUSTER_LOGS"
+                    <> help "Path to the local cluster logs file"
+                )
