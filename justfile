@@ -31,6 +31,7 @@ bench target:
 local-cluster:
   nix shell '.#local-cluster' '.#cardano-node' '.#cardano-wallet' \
     -c "local-cluster" \
+    monitoring \
     --cluster-configs lib/local-cluster/test/data/cluster-configs \
     --faucet-funds ${FAUCET_FUNDS_FILE} \
     --monitoring-port 12798 \

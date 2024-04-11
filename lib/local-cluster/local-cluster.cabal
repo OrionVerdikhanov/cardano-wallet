@@ -159,6 +159,7 @@ executable local-cluster
     , cardano-wallet-application-extras
     , cardano-wallet-launcher
     , cardano-wallet-primitive
+    , iohk-monitoring
     , iohk-monitoring-extra
     , foldl
     , lens

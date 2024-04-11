@@ -2,13 +2,16 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
+    , Monitoring (..)
     , parseCommandLineOptions
     , clusterConfigsDirParser
     , renderPullingMode
+    , renderMonitoring
     ) where
 
 import Prelude
@@ -31,10 +34,12 @@ import Network.Wai.Handler.Warp
 import Options.Applicative
     ( Parser
     , auto
+    , command
     , eitherReader
     , execParser
     , help
     , helper
+    , hsubparser
     , info
     , long
     , metavar
@@ -45,29 +50,32 @@ import Options.Applicative
     , (<**>)
     )
 
+data Monitoring = Monitoring
+    { monitoringPort :: Port
+    , pullingMode :: MonitorState
+    }
+    deriving stock (Show)
+
 data CommandLineOptions = CommandLineOptions
     { clusterConfigsDir :: FileOf "cluster-configs"
     , faucetFundsFile :: FileOf "faucet-funds"
     , clusterDir :: Maybe (FileOf "cluster")
-    , monitoringPort :: Port
-    , pullingMode :: MonitorState
+    , monitoring :: Maybe Monitoring
     , clusterLogs :: Maybe (FileOf "cluster-logs")
     }
     deriving stock (Show)
 
 parseCommandLineOptions :: IO CommandLineOptions
-parseCommandLineOptions =
+parseCommandLineOptions = do
+    let options = monitoringParser $ do
+            clusterConfigsDir <- clusterConfigsDirParser
+            faucetFundsFile <- faucetFundsParser
+            clusterDir <- clusterDirParser
+            clusterLogs <- clusterLogsParser
+            pure $ \monitoring -> CommandLineOptions{..}
     execParser
         $ info
-            ( CommandLineOptions
-                <$> clusterConfigsDirParser
-                <*> faucetFundsParser
-                <*> clusterDirParser
-                <*> portParser
-                <*> monitorStateParser
-                <*> clusterLogsParser
-                <**> helper
-            )
+            (options <**> helper)
             (progDesc "Local Cluster for testing")
 
 clusterConfigsDirParser :: Parser (FileOf "cluster-configs")
@@ -138,6 +146,34 @@ renderPullingMode :: MonitorState -> String
 renderPullingMode = \case
     NotPullingState -> "not-pulling"
     PullingState -> "pulling"
+
+renderMonitoring :: Maybe Monitoring -> [String]
+renderMonitoring (Just Monitoring{..})  =
+    [ "monitoring"
+    , "--monitoring-port", show monitoringPort
+    , "--pulling-mode", renderPullingMode pullingMode
+    ]
+renderMonitoring Nothing =
+    [ "no-monitoring"
+    ]
+
+monitoringParser :: Parser (Maybe Monitoring -> a) -> Parser a
+monitoringParser f =
+    hsubparser $ monitoringCommand <> noMonitoring
+  where
+    monitoringCommand =
+        command "monitoring"
+            $ info (f <*> yesMonitoringParser)
+            $ progDesc "Enable monitoring"
+    yesMonitoringParser =
+        fmap Just
+            $ Monitoring
+                <$> portParser
+                <*> monitorStateParser
+    noMonitoring =
+        command "no-monitoring"
+            $ info (f <*> pure Nothing)
+            $ progDesc "Disable monitoring"
 
 clusterLogsParser :: Parser (Maybe (FileOf "cluster-logs"))
 clusterLogsParser =

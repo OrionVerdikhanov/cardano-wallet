@@ -4,12 +4,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Prelude
 
 import Cardano.BM.Extra
     ( stdoutTextTracer
+    )
+import Cardano.BM.Tracing
+    ( nullTracer
     )
 import Cardano.Startup
     ( installSignalHandlers
@@ -23,6 +27,7 @@ import Cardano.Wallet.Launch.Cluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
+    , Monitoring (..)
     , parseCommandLineOptions
     )
 import Cardano.Wallet.Launch.Cluster.Config
@@ -133,14 +138,15 @@ main = withUtf8 $ do
         { clusterConfigsDir
         , faucetFundsFile
         , clusterDir
-        , monitoringPort
-        , pullingMode
+        , monitoring
         , clusterLogs
         } <-
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
-        trace <- ContT $ withMonitor monitoringPort pullingMode
+        trace <- case monitoring of
+            Just Monitoring{..} -> ContT $ withMonitor monitoringPort pullingMode
+            Nothing -> pure nullTracer
         clusterPath <-
             case clusterDir of
                 Just (FileOf path) -> pure path

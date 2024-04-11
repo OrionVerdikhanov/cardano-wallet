@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
-
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 {-
@@ -40,7 +39,8 @@ import Cardano.Wallet.Launch.Cluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
-    , renderPullingMode
+    , Monitoring
+    , renderMonitoring
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
@@ -61,9 +61,6 @@ import Control.Monad.Cont
     )
 import Control.Monad.Trans
     ( lift
-    )
-import Control.Monitoring
-    ( MonitorState
     )
 import Data.Aeson
     ( FromJSON
@@ -111,10 +108,11 @@ localClusterProcess CommandLineOptions{..} era = do
             [ ("LOCAL_CLUSTER_ERA", clusterEraToString era)
             ]
     output <- case clusterLogs of
-            Nothing -> pure Inherit
-            Just (FileOf logFile) ->
-                fmap UseHandle
-                    $ ContT $ withFile logFile WriteMode
+        Nothing -> pure Inherit
+        Just (FileOf logFile) ->
+            fmap UseHandle
+                $ ContT
+                $ withFile logFile WriteMode
     pure
         $ (proc "local-cluster" args)
             { env = Just $ myEnv ++ envs
@@ -124,16 +122,13 @@ localClusterProcess CommandLineOptions{..} era = do
             }
   where
     args =
-        [ "--cluster-configs"
+        renderMonitoring monitoring
+        <> [ "--cluster-configs"
         , pathOf clusterConfigsDir
         , "--faucet-funds"
         , pathOf faucetFundsFile
-        , "--monitoring-port"
-        , show monitoringPort
-        , "--pulling-mode"
-        , renderPullingMode pullingMode
-        ]
-            <> case clusterDir of
+        ] <>
+            case clusterDir of
                 Nothing -> []
                 Just clusterDir' ->
                     [ "--cluster"
@@ -165,10 +160,8 @@ withGenesisData shelleyGenesis = ContT $ \f -> do
 
 withLocalCluster
     :: HasCallStack
-    => Int
-    -- ^ Port for monitoring the local cluster.
-    -> MonitorState
-    -- ^ In which state the monitoring should start.
+    => Maybe Monitoring
+    -- ^ If to monitor the cluster.
     -> Config
     -- ^ Configuration for the cluster.
     -> FaucetFunds
@@ -177,18 +170,17 @@ withLocalCluster
     -- ^ Action to run once when all pools have started.
     -> IO a
 withLocalCluster
-    monitoringPort
-    initialPullingState
+    monitoring
     Config{..}
     faucetFunds
     action = do
         let
             clusterConfigsDir = cfgClusterConfigs
-            relayDir = pathOf cfgClusterDir
-                </> pathOfNodePathSegment cfgRelayNodePath
+            relayDir =
+                pathOf cfgClusterDir
+                    </> pathOfNodePathSegment cfgRelayNodePath
             shelleyGenesis = pathOf cfgClusterDir </> "shelley-genesis.json"
             clusterDir = Just cfgClusterDir
-            pullingMode = initialPullingState
             clusterLogs = cfgClusterLogFile
         evalContT $ do
             faucetFundsFile <- withFaucetFunds faucetFunds

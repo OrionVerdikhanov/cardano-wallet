@@ -121,9 +121,6 @@ import Control.Monad
 import Control.Monad.IO.Class
     ( liftIO
     )
-import Control.Monitoring.Monitor
-    ( MonitorState (..)
-    )
 import Control.Tracer
     ( Tracer (..)
     , contramap
@@ -358,7 +355,7 @@ withServer
                                 $ testDir </> "cluster.logs"
                             }
                 traceWith tr $ MsgInfo "Starting local cluster ..."
-                withLocalCluster 6_080 NotPullingState clusterConfig faucetFunds
+                withLocalCluster Nothing clusterConfig faucetFunds
                     $ onClusterStart
                         ctx
                         (onReady (T.pack smashUrl))
