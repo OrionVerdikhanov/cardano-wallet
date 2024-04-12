@@ -7,11 +7,12 @@
 
 module Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
+    , ClusterControl (..)
     , Monitoring (..)
     , parseCommandLineOptions
     , clusterConfigsDirParser
     , renderPullingMode
-    , renderMonitoring
+    , renderControl
     ) where
 
 import Prelude
@@ -50,9 +51,14 @@ import Options.Applicative
     , (<**>)
     )
 
-data Monitoring = Monitoring
-    { monitoringPort :: Port
+data ClusterControl = ClusterControl
+    { clusterControlPort :: Port
     , pullingMode :: MonitorState
+    }
+    deriving stock (Show)
+
+newtype Monitoring = Monitoring
+    { monitoringPort :: Port
     }
     deriving stock (Show)
 
@@ -61,22 +67,46 @@ data CommandLineOptions = CommandLineOptions
     , faucetFundsFile :: FileOf "faucet-funds"
     , clusterDir :: Maybe (FileOf "cluster")
     , monitoring :: Maybe Monitoring
+    , clusterControl :: Maybe ClusterControl
     , clusterLogs :: Maybe (FileOf "cluster-logs")
     }
     deriving stock (Show)
 
 parseCommandLineOptions :: IO CommandLineOptions
 parseCommandLineOptions = do
-    let options = monitoringParser $ do
+    let options = clusterControlParser $ do
             clusterConfigsDir <- clusterConfigsDirParser
             faucetFundsFile <- faucetFundsParser
             clusterDir <- clusterDirParser
             clusterLogs <- clusterLogsParser
-            pure $ \monitoring -> CommandLineOptions{..}
+            monitoring <- monitoringParser
+            pure $ \clusterControl -> CommandLineOptions{..}
     execParser
         $ info
             (options <**> helper)
             (progDesc "Local Cluster for testing")
+
+monitoringParser :: Parser (Maybe Monitoring)
+monitoringParser = optional $ Monitoring <$> httpPortParser
+
+httpPortParser :: Parser Port
+httpPortParser = do
+    option
+        parse
+        ( long "monitoring-port"
+            <> metavar "MONITORING_PORT"
+            <> help "Port for the monitoring HTTP server"
+        )
+  where
+    parse = do
+        p <- auto
+        unless (p `elem` validPorts)
+            $ fail
+            $ "Invalid port number. Must be inside: "
+                ++ show (head validPorts)
+                ++ ".."
+                ++ show (last validPorts)
+        pure p
 
 clusterConfigsDirParser :: Parser (FileOf "cluster-configs")
 clusterConfigsDirParser =
@@ -106,13 +136,13 @@ clusterDirParser =
                     <> help "Path to the local cluster directory"
                 )
 
-portParser :: Parser Port
-portParser = do
+tcpPortParser :: Parser Port
+tcpPortParser = do
     option
         parse
-        ( long "monitoring-port"
-            <> metavar "MONITORING_PORT"
-            <> help "Port for the monitoring server"
+        ( long "control-port"
+            <> metavar "CONTROL_PORT"
+            <> help "Port for the TCP control server"
         )
   where
     parse = do
@@ -131,7 +161,7 @@ monitorStateParser = do
         parse
         ( long "pulling-mode"
             <> metavar "PULLING_MODE"
-            <> help "Mode for the monitoring server"
+            <> help "Mode for the control server"
         )
   where
     parse = eitherReader $ \case
@@ -147,33 +177,33 @@ renderPullingMode = \case
     NotPullingState -> "not-pulling"
     PullingState -> "pulling"
 
-renderMonitoring :: Maybe Monitoring -> [String]
-renderMonitoring (Just Monitoring{..})  =
-    [ "monitoring"
-    , "--monitoring-port", show monitoringPort
+renderControl :: Maybe ClusterControl -> [String]
+renderControl (Just ClusterControl{..})  =
+    [ "control"
+    , "--control-port", show clusterControlPort
     , "--pulling-mode", renderPullingMode pullingMode
     ]
-renderMonitoring Nothing =
-    [ "no-monitoring"
+renderControl Nothing =
+    [ "no-control"
     ]
 
-monitoringParser :: Parser (Maybe Monitoring -> a) -> Parser a
-monitoringParser f =
-    hsubparser $ monitoringCommand <> noMonitoring
+clusterControlParser :: Parser (Maybe ClusterControl -> a) -> Parser a
+clusterControlParser f =
+    hsubparser $ controlCommand <> noControl
   where
-    monitoringCommand =
-        command "monitoring"
-            $ info (f <*> yesMonitoringParser)
-            $ progDesc "Enable monitoring"
-    yesMonitoringParser =
+    controlCommand =
+        command "control"
+            $ info (f <*> yesControlParser)
+            $ progDesc "Enable control"
+    yesControlParser =
         fmap Just
-            $ Monitoring
-                <$> portParser
+            $ ClusterControl
+                <$> tcpPortParser
                 <*> monitorStateParser
-    noMonitoring =
-        command "no-monitoring"
+    noControl =
+        command "no-control"
             $ info (f <*> pure Nothing)
-            $ progDesc "Disable monitoring"
+            $ progDesc "Disable control"
 
 clusterLogsParser :: Parser (Maybe (FileOf "cluster-logs"))
 clusterLogsParser =

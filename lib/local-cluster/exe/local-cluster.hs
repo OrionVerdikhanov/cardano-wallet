@@ -4,16 +4,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Prelude
 
 import Cardano.BM.Extra
     ( stdoutTextTracer
-    )
-import Cardano.BM.Tracing
-    ( nullTracer
     )
 import Cardano.Startup
     ( installSignalHandlers
@@ -27,7 +23,6 @@ import Cardano.Wallet.Launch.Cluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
-    , Monitoring (..)
     , parseCommandLineOptions
     )
 import Cardano.Wallet.Launch.Cluster.Config
@@ -37,7 +32,7 @@ import Cardano.Wallet.Launch.Cluster.FileOf
     ( FileOf (..)
     )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
-    ( withMonitor
+    ( withMonitoring
     )
 import Control.Concurrent
     ( threadDelay
@@ -133,20 +128,20 @@ main = withUtf8 $ do
     clusterEra <- Cluster.clusterEraFromEnv
     cfgNodeLogging <-
         Cluster.logFileConfigFromEnv
-            (Just (Cluster.clusterEraToString clusterEra))
+            $ Just
+            $ Cluster.clusterEraToString clusterEra
     CommandLineOptions
         { clusterConfigsDir
         , faucetFundsFile
         , clusterDir
         , monitoring
         , clusterLogs
+        , clusterControl
         } <-
         parseCommandLineOptions
     funds <- retrieveFunds $ pathOf faucetFundsFile
     flip runContT pure $ do
-        trace <- case monitoring of
-            Just Monitoring{..} -> ContT $ withMonitor monitoringPort pullingMode
-            Nothing -> pure nullTracer
+        trace <- withMonitoring clusterControl monitoring
         clusterPath <-
             case clusterDir of
                 Just (FileOf path) -> pure path

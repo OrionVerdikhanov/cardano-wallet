@@ -336,7 +336,7 @@ withServer
             traceWith tr $ MsgInfo "Starting SMASH server ..."
             withSMASH tr' testDir $ \smashUrl -> do
                 traceWith tr $ MsgInfo "Starting local cluster ..."
-                withLocalCluster Nothing clusterConfig faucetFunds
+                withLocalCluster clusterConfig faucetFunds
                     $ onClusterStart
                         ctx
                         (onReady (T.pack smashUrl))

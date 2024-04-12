@@ -5,7 +5,7 @@
 -- | How to run a monitor
 module Control.Monitoring.Server
     ( Protocol (..)
-    , runMonitor
+    , runTCPControl
     )
 where
 
@@ -50,8 +50,10 @@ data Protocol
     | Kill -- ^ Try to kill the program on the next trace
     deriving stock (Show, Read)
 
--- | Run a monitor on a given port
-runMonitor
+-- | Run a TCP control of the monitor on a given port
+-- We use CPS even if it's not needed in this implementation as a
+-- future-proofing measure.
+runTCPControl
     :: MonadUnliftIO m
     => Int
     -- ^ The port to listen on
@@ -59,10 +61,10 @@ runMonitor
     -- ^ How to render the output
     -> Monitor m a b
     -- ^ The monitor
-    -> ((a -> m ()) -> m c)
+    -> (() -> m c)
     -- ^ The action to run with the tracer from the monitor
     -> m c
-runMonitor port renderOuptut c action = do
+runTCPControl port renderOuptut c action = do
     UnliftIO run <- askUnliftIO
     liftIO
         $ link <=< async
@@ -82,4 +84,4 @@ runMonitor port renderOuptut c action = do
                     Just Observe -> p
                     Just Kill -> run (kill c)
                     Nothing -> hPutStrLn handle "Invalid command"
-    action $ trace c
+    action ()

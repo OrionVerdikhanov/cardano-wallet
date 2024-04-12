@@ -31,10 +31,10 @@ bench target:
 local-cluster:
   nix shell '.#local-cluster' '.#cardano-node' '.#cardano-wallet' \
     -c "local-cluster" \
-    monitoring \
+    controlling \
     --cluster-configs lib/local-cluster/test/data/cluster-configs \
     --faucet-funds ${FAUCET_FUNDS_FILE} \
-    --monitoring-port 12798 \
+    --control-port 12798 \
     --pulling-mode not-pulling
 
 # run unit tests on a match

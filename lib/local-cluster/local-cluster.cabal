@@ -61,6 +61,8 @@ library
     Cardano.Wallet.Launch.Cluster.KeyRegistration
     Cardano.Wallet.Launch.Cluster.Logging
     Cardano.Wallet.Launch.Cluster.MonetaryPolicyScript
+    Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
+    Cardano.Wallet.Launch.Cluster.Monitoring.Http.Server
     Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     Cardano.Wallet.Launch.Cluster.Monitoring.Phase
     Cardano.Wallet.Launch.Cluster.Node.GenNodeConfig

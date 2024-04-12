@@ -39,8 +39,8 @@ import Cardano.Wallet.Launch.Cluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
-    , Monitoring
-    , renderMonitoring
+    , Monitoring (..)
+    , renderControl
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
@@ -48,6 +48,9 @@ import Cardano.Wallet.Launch.Cluster.Config
     )
 import Cardano.Wallet.Launch.Cluster.Node.RunningNode
     ( RunningNode (..)
+    )
+import Cardano.Wallet.Network.Ports
+    ( getRandomPort
     )
 import Control.Concurrent
     ( threadDelay
@@ -60,7 +63,11 @@ import Control.Monad.Cont
     , evalContT
     )
 import Control.Monad.Trans
-    ( lift
+    ( MonadIO (..)
+    , lift
+    )
+import Control.Tracer
+    ( Tracer
     )
 import Data.Aeson
     ( FromJSON
@@ -97,11 +104,12 @@ import System.Process.Extra
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 
-localClusterProcess
+withLocalClusterProcess
     :: CommandLineOptions
+    -> Tracer IO ClusterLog
     -> ClusterEra
-    -> ContT r IO CreateProcess
-localClusterProcess CommandLineOptions{..} era = do
+    -> ContT r IO ()
+withLocalClusterProcess CommandLineOptions{..} cfgTracer era = do
     myEnv <- lift getEnvironment
 
     let envs =
@@ -113,7 +121,11 @@ localClusterProcess CommandLineOptions{..} era = do
             fmap UseHandle
                 $ ContT
                 $ withFile logFile WriteMode
-    pure
+
+    void
+        $ ContT
+        $ withBackendCreateProcess
+            (MsgLauncher "local-cluster" >$< cfgTracer)
         $ (proc "local-cluster" args)
             { env = Just $ myEnv ++ envs
             , -- , cwd = Just $ nodeDir cfg
@@ -122,13 +134,13 @@ localClusterProcess CommandLineOptions{..} era = do
             }
   where
     args =
-        renderMonitoring monitoring
-        <> [ "--cluster-configs"
-        , pathOf clusterConfigsDir
-        , "--faucet-funds"
-        , pathOf faucetFundsFile
-        ] <>
-            case clusterDir of
+        renderControl clusterControl
+            <> [ "--cluster-configs"
+               , pathOf clusterConfigsDir
+               , "--faucet-funds"
+               , pathOf faucetFundsFile
+               ]
+            <> case clusterDir of
                 Nothing -> []
                 Just clusterDir' ->
                     [ "--cluster"
@@ -158,11 +170,10 @@ withGenesisData shelleyGenesis = ContT $ \f -> do
     genesisData <- BS.readFile shelleyGenesis >>= Aeson.throwDecodeStrict
     f genesisData
 
+-- | Run an action against a node socket,  backed by a local cluster process
 withLocalCluster
     :: HasCallStack
-    => Maybe Monitoring
-    -- ^ If to monitor the cluster.
-    -> Config
+    => Config
     -- ^ Configuration for the cluster.
     -> FaucetFunds
     -- ^ Initial faucet funds.
@@ -170,7 +181,6 @@ withLocalCluster
     -- ^ Action to run once when all pools have started.
     -> IO a
 withLocalCluster
-    monitoring
     Config{..}
     faucetFunds
     action = do
@@ -182,15 +192,17 @@ withLocalCluster
             shelleyGenesis = pathOf cfgClusterDir </> "shelley-genesis.json"
             clusterDir = Just cfgClusterDir
             clusterLogs = cfgClusterLogFile
+            clusterControl = Nothing
+        monitoring <- do
+            httPort <- liftIO getRandomPort
+            pure $ Just $ Monitoring $ fromIntegral httPort
         evalContT $ do
             faucetFundsFile <- withFaucetFunds faucetFunds
             socketPath <- withSocketPath $ FileOf relayDir
-            cp <- localClusterProcess CommandLineOptions{..} cfgLastHardFork
-            void
-                $ ContT
-                $ withBackendCreateProcess
-                    (MsgLauncher "local-cluster" >$< cfgTracer)
-                    cp
+            withLocalClusterProcess
+                CommandLineOptions{..}
+                cfgTracer
+                cfgLastHardFork
             lift $ threadDelay 10_000_000 -- when the cluster is ready ?
             genesisData <- withGenesisData shelleyGenesis
             lift
