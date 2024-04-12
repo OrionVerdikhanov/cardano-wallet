@@ -633,7 +633,7 @@ balanceTransactionWithSelectionStrategyAndNoZeroAdaAdjustment
     pp
     timeTranslation
     utxoAssumptions
-    (UTxOIndex availableUTxO availableUTxOIndex)
+    UTxOIndex {availableUTxO, availableUTxOIndex}
     genChange
     s
     selectionStrategy
