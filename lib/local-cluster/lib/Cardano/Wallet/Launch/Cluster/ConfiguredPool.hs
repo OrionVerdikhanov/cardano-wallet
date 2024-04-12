@@ -434,6 +434,8 @@ configurePool metadataServer recipe = do
         nodeId = PoolNode i
         nodeSegment = NodePathSegment name
     poolDir <- askNodeDir nodeSegment
+    liftIO $ traceWith cfgTracer
+        $ MsgInfo $ "Configuring " <> T.pack (show poolDir)
     liftIO $ createDirectoryIfMissing False poolDir
 
     -- Generate/assign keys
@@ -536,10 +538,10 @@ configurePool metadataServer recipe = do
 
                 let cfg =
                         CardanoNodeConfig
-                            { nodeDir = poolDir
+                            { nodeDir = "."
                             , nodeConfigFile = pathOf @"node-config" nodeConfig
                             , nodeTopologyFile = pathOf @"topology" topology
-                            , nodeDatabaseDir = "db"
+                            , nodeDatabaseDir = poolDir </> "db"
                             , nodeDlgCertFile = Nothing
                             , nodeSignKeyFile = Nothing
                             , nodeOpCertFile = Just opCert

@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Wallet.Faucet.Yaml
     ( retrieveFunds
@@ -45,6 +46,10 @@ import Data.Aeson.Types
     )
 import Data.Bifunctor
     ( Bifunctor (..)
+    )
+import UnliftIO
+    ( SomeException
+    , catch
     )
 
 import qualified Data.Text as T
@@ -91,7 +96,10 @@ faucetFundsToValue FaucetFunds{..} =
             ]
 
 retrieveFunds :: FilePath -> IO FaucetFunds
-retrieveFunds fp = getFaucetFunds <$> Y.decodeFileThrow fp
+retrieveFunds fp = catch
+    (getFaucetFunds <$> Y.decodeFileThrow fp)
+    $ \(e :: SomeException) ->
+        fail $ "Failed to read faucet funds from file: " <> show e
 
 saveFunds :: FilePath -> FaucetFunds -> IO ()
 saveFunds fp = Y.encodeFile fp . FaucetFundsYaml

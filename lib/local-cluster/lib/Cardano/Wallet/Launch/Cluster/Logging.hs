@@ -39,6 +39,12 @@ import Cardano.Wallet.Launch.Cluster.ClusterEra
     ( ClusterEra
     , clusterEraToString
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
+    ( MsgClient (..)
+    )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
+    ( MsgHttpMonitoring (..)
+    )
 import Control.Monad
     ( liftM2
     )
@@ -100,6 +106,7 @@ data ClusterLog
     | MsgHardFork ClusterEra
     | MsgNodeStdout NodeId Text
     | MsgNodeStderr NodeId Text
+    | MsgHttpMonitoring MsgHttpMonitoring
     deriving stock (Show)
 
 instance ToText ClusterLog where
@@ -176,6 +183,12 @@ instance ToText ClusterLog where
             "Hard fork to " <> T.pack (clusterEraToString era)
         MsgNodeStdout node msg -> T.pack (show node) <> "(stdout): " <> msg
         MsgNodeStderr node msg -> T.pack (show node) <> "(stderr): " <> msg
+        MsgHttpMonitoring (MsgHttpMonitoringPort port) ->
+            "Monitoring server listening on port " <> T.pack (show port)
+        MsgHttpMonitoring (MsgHttpMonitoringQuery msg) ->
+            "Querying monitoring server: " <> case msg of
+                MsgClientReq q -> "Requesting " <> T.pack (show q)
+                MsgClientRetry q -> "Retrying " <> T.pack (show q)
       where
         indent =
             T.unlines
@@ -212,6 +225,7 @@ instance HasSeverityAnnotation ClusterLog where
         MsgHardFork _ -> Info
         MsgNodeStdout _ _ -> Debug
         MsgNodeStderr _ _ -> Debug
+        MsgHttpMonitoring _ -> Info
 
 bracketTracer' :: Tracer IO ClusterLog -> Text -> IO a -> IO a
 bracketTracer' tr name = bracketTracer (contramap (MsgBracket name) tr)

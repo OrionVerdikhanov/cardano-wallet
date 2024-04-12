@@ -1,7 +1,10 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     ( withMonitoring
+    , withHttpMonitoring
+    , MsgHttpMonitoring (..)
     )
 where
 
@@ -11,11 +14,20 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     ( ClusterControl (..)
     , Monitoring (..)
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
+    ( MsgClient
+    , RunQuery
+    , withHttpClient
+    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Server
     ( withHttpServer
     )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Phase
     ( Phase
+    )
+import Cardano.Wallet.Network.Ports
+    ( PortNumber
+    , getRandomPort
     )
 import Control.Monad.Cont
     ( ContT (..)
@@ -40,9 +52,13 @@ import Control.Monitoring
 import Control.Tracer
     ( Tracer (..)
     , nullTracer
+    , traceWith
     )
 import Data.Foldable
     ( Foldable (..)
+    )
+import Data.Functor.Contravariant
+    ( (>$<)
     )
 import Data.Map
     ( Map
@@ -66,8 +82,8 @@ withClusterControl
     -> (() -> m r)
     -- ^ Action to run with the monitor tracer
     -> m r
-withClusterControl monitoringPort
-    = runTCPControl monitoringPort (fmap show . toList)
+withClusterControl monitoringPort =
+    runTCPControl monitoringPort (fmap show . toList)
 
 timedMonitor :: MonadIO m => MonitorState -> m (Monitor m a (Map UTCTime a))
 timedMonitor initialState = do
@@ -98,3 +114,23 @@ withMonitoring mClusterControl mMonitoring = do
     cMonitor <- maybeM mClusterControl tcp
     mMonitor <- maybeM mMonitoring $ http cMonitor
     pure $ maybe nullTracer (Tracer . trace) mMonitor
+
+data MsgHttpMonitoring
+    = MsgHttpMonitoringPort PortNumber
+    | MsgHttpMonitoringQuery MsgClient
+    deriving stock (Show)
+
+-- | This will create a client for a monitoring system and a monitor command line
+-- option that will start a monitoring server on the same port the client is listening to.
+withHttpMonitoring
+    :: MonadUnliftIO m
+    => Tracer m MsgHttpMonitoring
+    -> ContT b m (Monitoring, RunQuery m)
+withHttpMonitoring tr =
+    do
+        httpPort <- liftIO getRandomPort
+        lift $ traceWith tr $ MsgHttpMonitoringPort httpPort
+        monitorClient <-
+            withHttpClient (MsgHttpMonitoringQuery >$< tr)
+                $ fromIntegral httpPort
+        pure (Monitoring $ fromIntegral httpPort, monitorClient)

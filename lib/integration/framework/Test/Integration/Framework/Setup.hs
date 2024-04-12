@@ -502,6 +502,7 @@ withContext testingCtx@TestingCtx{..} action = do
                             $ FileOf @"cluster-logs"
                             $ testDir </> "cluster.logs"
                     }
+        traceWith tr $ MsgInfo $ "Cluster output dir " <> T.pack testDir
         let dbEventRecorder =
                 recordPoolGarbageCollectionEvents
                     testingCtx

@@ -31,11 +31,12 @@ bench target:
 local-cluster:
   nix shell '.#local-cluster' '.#cardano-node' '.#cardano-wallet' \
     -c "local-cluster" \
-    controlling \
+    control \
     --cluster-configs lib/local-cluster/test/data/cluster-configs \
     --faucet-funds ${FAUCET_FUNDS_FILE} \
     --control-port 12798 \
-    --pulling-mode not-pulling
+    --pulling-mode not-pulling \
+    --monitoring-port 12799
 
 # run unit tests on a match
 unit-tests-cabal-match match:
@@ -107,6 +108,7 @@ conway-integration-tests-cabal:
 
 # run any integration test matching the given pattern via nix
 integration-tests match:
+  TESTS_TRACING_MIN_SEVERITY=info \
   LOCAL_CLUSTER_CONFIGS=lib/local-cluster/test/data/cluster-configs \
   CARDANO_WALLET_TEST_DATA=lib/integration/test/data \
   TESTS_RETRY_FAILED=1 \

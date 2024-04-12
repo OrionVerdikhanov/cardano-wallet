@@ -122,6 +122,7 @@ import Data.List.NonEmpty
     )
 import System.Directory
     ( createDirectoryIfMissing
+    , getCurrentDirectory
     )
 import System.Exit
     ( ExitCode (..)
@@ -184,6 +185,11 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
         $ bracketTracer' "withCluster"
         $ flip runContT pure
         $ do
+            liftIO $ traceWith cfgTracer
+                $ MsgInfo $ "Cluster dir " <> T.pack (show cfgClusterDir)
+            pwd <- liftIO  getCurrentDirectory
+            liftIO $ traceWith cfgTracer
+                $ MsgInfo $ "Current dir " <> T.pack pwd
             let clusterDir = pathOf cfgClusterDir
             lift $ traceClusterLog $ MsgHardFork cfgLastHardFork
             phase Metadata

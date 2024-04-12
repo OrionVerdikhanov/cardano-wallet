@@ -214,3 +214,33 @@ clusterLogsParser =
                     <> metavar "LOCAL_CLUSTER_LOGS"
                     <> help "Path to the local cluster logs file"
                 )
+
+-- renderCommandLineOptions :: CommandLineOptions -> [String]
+-- renderCommandLineOptions CommandLineOptions{..} =
+--     [ "--cluster-configs"
+--     , pathOf clusterConfigsDir
+--     , "--faucet-funds"
+--     , pathOf faucetFundsFile
+--     ]
+--     <> case clusterDir of
+--         Nothing -> []
+--         Just clusterDir' ->
+--             [ "--cluster"
+--             , pathOf clusterDir'
+--             ]
+--     <> case monitoring of
+--         Nothing -> []
+--         Just (Monitoring port) ->
+--             [ "--monitoring-port"
+--             , show port
+--             ]
+--     <> case clusterControl of
+--         Nothing -> []
+--         Just control ->
+--             renderControl (Just control)
+--     <> case clusterLogs of
+--         Nothing -> []
+--         Just (FileOf logFile) ->
+--             [ "--cluster-logs"
+--             , pathOf logFile
+--             ]

@@ -46,7 +46,8 @@ import Cardano.Wallet.Launch.Cluster.GenesisFiles
     ( GenesisFiles (..)
     )
 import Cardano.Wallet.Launch.Cluster.Logging
-    ( LogFileConfig (..)
+    ( ClusterLog (..)
+    , LogFileConfig (..)
     )
 import Control.Monad
     ( (>=>)
@@ -55,6 +56,9 @@ import Control.Monad.Reader
     ( MonadIO (..)
     , MonadReader (..)
     )
+import Control.Tracer
+    ( traceWith
+    )
 import Data.Aeson
     ( toJSON
     )
@@ -62,6 +66,10 @@ import Data.Generics.Labels
     ()
 import Data.Maybe
     ( catMaybes
+    )
+import Data.Tagged
+    ( Tagged
+    , untag
     )
 import Ouroboros.Network.Magic
     ( NetworkMagic (..)
@@ -76,10 +84,6 @@ import System.FilePath
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.KeyMap as Aeson
-import Data.Tagged
-    ( Tagged
-    , untag
-    )
 import qualified Data.Text as T
 import qualified Data.Yaml as Yaml
 
@@ -129,7 +133,8 @@ genNodeConfig nodeSegment name genesisFiles clusterEra logCfg = do
 
     let poolNodeConfig =
             poolDir </> ("node" <> untag name <> "-config.yaml")
-
+    liftIO $ traceWith cfgTracer $ MsgInfo
+        $ "Generating node config: " <> T.pack (show poolNodeConfig)
     liftIO
         $ Yaml.decodeFileThrow (pathOf cfgClusterConfigs </> "node-config.json")
             >>= withAddedKey "ShelleyGenesisFile" shelleyGenesis

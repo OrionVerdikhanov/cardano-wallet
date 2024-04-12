@@ -2,6 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-
 Control the launching of a cluster of nodes for testing purposes.
@@ -30,7 +31,7 @@ import Cardano.Wallet.Faucet.Yaml
     )
 import Cardano.Wallet.Launch.Cluster
     ( ClusterEra
-    , ClusterLog (MsgLauncher)
+    , ClusterLog (..)
     , FaucetFunds
     , FileOf (..)
     , RunningNode
@@ -46,14 +47,15 @@ import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
     , NodePathSegment (pathOfNodePathSegment)
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
+    ( Query (..)
+    , RunQuery (..)
+    )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
+    ( withHttpMonitoring
+    )
 import Cardano.Wallet.Launch.Cluster.Node.RunningNode
     ( RunningNode (..)
-    )
-import Cardano.Wallet.Network.Ports
-    ( getRandomPort
-    )
-import Control.Concurrent
-    ( threadDelay
     )
 import Control.Monad
     ( void
@@ -65,6 +67,12 @@ import Control.Monad.Cont
 import Control.Monad.Trans
     ( MonadIO (..)
     , lift
+    )
+import Control.Retry
+    ( RetryPolicyM
+    , capDelay
+    , exponentialBackoff
+    , retrying
     )
 import Control.Tracer
     ( Tracer
@@ -99,6 +107,10 @@ import System.Process.Extra
     ( CreateProcess (..)
     , StdStream (..)
     , proc
+    )
+import UnliftIO
+    ( SomeException
+    , try
     )
 
 import qualified Data.Aeson as Aeson
@@ -146,6 +158,12 @@ withLocalClusterProcess CommandLineOptions{..} cfgTracer era = do
                     [ "--cluster"
                     , pathOf clusterDir'
                     ]
+            <> case monitoring of
+                Nothing -> []
+                Just (Monitoring port) ->
+                    [ "--monitoring-port"
+                    , show port
+                    ]
 
 withFaucetFunds
     :: HasCallStack
@@ -167,8 +185,22 @@ withSocketPath cfgClusterDir = ContT $ \f ->
 
 withGenesisData :: FromJSON a => FilePath -> ContT r IO a
 withGenesisData shelleyGenesis = ContT $ \f -> do
-    genesisData <- BS.readFile shelleyGenesis >>= Aeson.throwDecodeStrict
-    f genesisData
+    genesisContent <- BS.readFile shelleyGenesis
+
+    eGenesisData <- try $ Aeson.throwDecodeStrict genesisContent
+    case eGenesisData of
+        Left (e :: SomeException) ->
+            error $ "Failed to decode genesis data: " ++ show e
+        Right genesisData -> f genesisData
+
+withLocalClusterReady :: (Query Bool -> IO Bool) -> IO ()
+withLocalClusterReady queryMonitor = do
+    void $ liftIO $ retrying policy (const $ pure . not) $ \_ -> do
+                queryMonitor Ready
+    where
+        policy :: RetryPolicyM IO
+        policy = capDelay (120 * oneSecond) $ exponentialBackoff oneSecond
+        oneSecond = 1_000_000 :: Int
 
 -- | Run an action against a node socket,  backed by a local cluster process
 withLocalCluster
@@ -193,17 +225,16 @@ withLocalCluster
             clusterDir = Just cfgClusterDir
             clusterLogs = cfgClusterLogFile
             clusterControl = Nothing
-        monitoring <- do
-            httPort <- liftIO getRandomPort
-            pure $ Just $ Monitoring $ fromIntegral httPort
         evalContT $ do
+            (monitoring, RunQuery queryMonitor) <-
+                withHttpMonitoring $ MsgHttpMonitoring >$< cfgTracer
             faucetFundsFile <- withFaucetFunds faucetFunds
             socketPath <- withSocketPath $ FileOf relayDir
             withLocalClusterProcess
-                CommandLineOptions{..}
+                CommandLineOptions{monitoring = Just monitoring, ..}
                 cfgTracer
                 cfgLastHardFork
-            lift $ threadDelay 10_000_000 -- when the cluster is ready ?
+            liftIO $ withLocalClusterReady queryMonitor
             genesisData <- withGenesisData shelleyGenesis
             lift
                 $ action
