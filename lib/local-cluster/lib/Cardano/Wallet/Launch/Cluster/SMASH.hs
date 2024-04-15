@@ -101,9 +101,11 @@ withSMASH tr parentDir action = do
             $ MsgRegisteringPoolMetadataInSMASH
                 (T.unpack $ toTextPoolId poolId)
                 hash
-
+        traceWith tr $ MsgInfo
+            $ "Writing pool metadata to disk " <> T.pack poolDir
         createDirectoryIfMissing True poolDir
-        BL8.writeFile (poolDir </> hashFile) bytes
+        BL8.writeFile hashFile bytes
+        traceWith tr $ MsgInfo $ "Wrote pool metadata to disk " <> T.pack hashFile
 
     -- Write delisted pools
     let toSmashId = T.pack . B8.unpack . convertToBase Base16 . getPoolId
