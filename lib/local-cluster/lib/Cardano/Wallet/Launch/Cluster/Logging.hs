@@ -94,7 +94,7 @@ data ClusterLog
     | MsgCLIRetryResult Text Int BL8.ByteString
     | MsgSocketIsReady CardanoNodeConn
     | MsgStakeDistribution String ExitCode BL8.ByteString BL8.ByteString
-    | MsgDebug Text
+    | MsgInfo Text
     | MsgGenOperatorKeyPair FilePath
     | MsgCLI [String]
     | MsgHardFork ClusterEra
@@ -168,7 +168,7 @@ instance ToText ClusterLog where
                     <> T.pack (show code)
                     <> ":\n"
                     <> indent err
-        MsgDebug msg -> msg
+        MsgInfo msg -> msg
         MsgGenOperatorKeyPair dir ->
             "Generating stake pool operator key pair in " <> T.pack dir
         MsgCLI args -> T.pack $ unwords ("cardano-cli" : args)
@@ -204,7 +204,7 @@ instance HasSeverityAnnotation ClusterLog where
         MsgStakeDistribution _ (ExitFailure _) _ _ -> Info
         -- NOTE: ^ Some failures are expected, so for cleaner logs we use Info,
         -- instead of Warning.
-        MsgDebug _ -> Debug
+        MsgInfo _ -> Info
         MsgGenOperatorKeyPair _ -> Debug
         MsgCLI _ -> Debug
         MsgRegisteringPoolMetadataInSMASH{} -> Info

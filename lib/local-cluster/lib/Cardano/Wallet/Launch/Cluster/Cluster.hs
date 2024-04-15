@@ -317,13 +317,13 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
 
             let waitAll = do
                     traceClusterLog
-                        $ MsgDebug "waiting for stake pools to register"
+                        $ MsgInfo "waiting for stake pools to register"
                     replicateM poolCount (readChan waitGroup)
 
             let onException :: SomeException -> ClusterM ()
                 onException e = do
                     traceClusterLog
-                        $ MsgDebug
+                        $ MsgInfo
                         $ "exception while starting pool: "
                             <> T.pack (show e)
                     writeChan waitGroup (Left e)
@@ -345,7 +345,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                                 readChan doneGroup
             mapM_ link asyncs
             let cancelAll = do
-                    traceWith cfgTracer $ MsgDebug "stopping all stake pools"
+                    traceWith cfgTracer $ MsgInfo "stopping all stake pools"
                     replicateM_ poolCount (writeChan doneGroup ())
                     mapM_ wait asyncs
 
