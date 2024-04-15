@@ -75,3 +75,5 @@ test-output
 
 ## Membench uncompressed data
 lib/wallet-benchmarks/data/membench-snapshot
+babbage-integration-tests-output/test.log
+babbage-integration-tests-output/wallet.log

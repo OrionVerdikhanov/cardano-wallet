@@ -58,7 +58,10 @@ steps:
   - label: "Babbage integration tests (linux)"
     key: linux-tests-integration-babbage
     depends_on: linux-nix
-    command: nix shell 'nixpkgs#just' -c just babbage-integration-tests
+    command: |
+      INTEGRATION_TEST_DIRECTORY=./babbage-integration-tests-output nix shell 'nixpkgs#just' -c just babbage-integration-tests
+    artifact_paths:
+      - ./babbage-integration-tests-output/**
     agents:
       system: ${linux}
     env:
@@ -67,7 +70,10 @@ steps:
   - label: "Conway integration tests (linux)"
     key: linux-tests-integration-conway
     depends_on: linux-nix
-    command: nix shell 'nixpkgs#just' -c just conway-integration-tests
+    command: |
+      INTEGRATION_TEST_DIRECTORY=./conway-integration-tests-output nix shell 'nixpkgs#just' -c just conway-integration-tests
+    artifact_paths:
+      - ./conway-integration-tests-output/**
     agents:
       system: ${linux}
     env:

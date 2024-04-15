@@ -158,9 +158,11 @@ import Servant.Client
     )
 import System.Directory
     ( createDirectory
+    , createDirectoryIfMissing
     )
 import System.Environment
-    ( setEnv
+    ( lookupEnv
+    , setEnv
     )
 import System.Environment.Extended
     ( envFromText
@@ -236,13 +238,24 @@ withTestsSetup action = do
     -- Flush test output as soon as a line is printed.
     -- Set UTF-8, regardless of user locale.
 
+    -- possibly retrieve a directory from the environment
+    -- where to report test logs, and modified configuration files
+    testDataDir <-
+        fmap FileOf
+            <$> lookupEnv "INTEGRATION_TEST_DIRECTORY"
     withUtf8
         $
         -- This temporary directory will contain logs, and all other data
         -- produced by the integration tests.
-        withSystemTempDir stdoutTextTracer "test" skipCleanup
-        $ \testDir ->
-            withTracers testDir $ action testDir
+        let run testDir = withTracers testDir $ action testDir
+        in case
+            testDataDir of
+                Nothing ->
+                    withSystemTempDir stdoutTextTracer "test" skipCleanup run
+                Just (FileOf dir) -> do
+                    createDirectoryIfMissing True dir
+                    run dir
+                    -- do not cleanup the directory if it was provided by the user
 
 mkFaucetFunds :: Cluster.TestnetMagic -> FaucetM FaucetFunds
 mkFaucetFunds testnetMagic = do
