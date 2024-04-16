@@ -31,14 +31,14 @@ data ResolvedTx era = UnsafeResolvedTx (UTxO era) (Tx era)
 pattern ResolvedTx :: IsRecentEra era => UTxO era -> Tx era -> ResolvedTx era
 pattern
     ResolvedTx utxo tx <- UnsafeResolvedTx utxo tx where
-    ResolvedTx utxo tx = makeResolvedTx utxo tx
+    ResolvedTx utxo tx = construct utxo tx
 
-makeResolvedTx
+construct
     :: forall era. IsRecentEra era
     => UTxO era
     -> Tx era
     -> ResolvedTx era
-makeResolvedTx utxo@(UTxO utxoMap) tx0 = UnsafeResolvedTx utxo tx
+construct utxo@(UTxO utxoMap) tx0 = UnsafeResolvedTx utxo tx
   where
     tx :: Tx era
     tx = over (bodyTxL . inputsTxBodyL) (Set.filter (`Map.member` utxoMap)) tx0
