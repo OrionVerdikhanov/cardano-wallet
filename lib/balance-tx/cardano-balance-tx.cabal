@@ -90,6 +90,7 @@ library internal
     Internal.Cardano.Write.Tx.Balance.TokenBundleSize
     Internal.Cardano.Write.Tx.Gen
     Internal.Cardano.Write.Tx.Redeemers
+    Internal.Cardano.Write.Tx.ResolvedTx
     Internal.Cardano.Write.Tx.Sign
     Internal.Cardano.Write.Tx.SizeEstimation
     Internal.Cardano.Write.Tx.TimeTranslation
