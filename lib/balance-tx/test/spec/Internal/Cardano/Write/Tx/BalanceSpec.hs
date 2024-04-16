@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -32,6 +33,10 @@ module Internal.Cardano.Write.Tx.BalanceSpec
 
 import Prelude
 
+import Internal.Cardano.Write.Tx.ResolvedTx
+    ( type ResolvedTx
+    , pattern ResolvedTx
+    )
 import Cardano.Api.Ledger
     ( EpochInterval (..)
     )
@@ -3024,3 +3029,8 @@ instance Monoid (CardanoApi.UTxO era) where
 
 instance Show TimeTranslation where
     show = const "TimeTranslation"
+
+--------------------------------------------------------------------------------
+
+shrinkResolvedTx :: ResolvedTx era -> ResolvedTx era
+shrinkResolvedTx = undefined
