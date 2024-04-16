@@ -33,10 +33,6 @@ module Internal.Cardano.Write.Tx.BalanceSpec
 
 import Prelude
 
-import Internal.Cardano.Write.Tx.ResolvedTx
-    ( type ResolvedTx
-    , pattern ResolvedTx
-    )
 import Cardano.Api.Ledger
     ( EpochInterval (..)
     )
@@ -319,6 +315,10 @@ import Internal.Cardano.Write.Tx.Balance
     , sizeOfCoin
     , splitSignedValue
     , updateTx
+    )
+import Internal.Cardano.Write.Tx.ResolvedTx
+    ( pattern ResolvedTx
+    , type ResolvedTx
     )
 import Internal.Cardano.Write.Tx.Sign
     ( KeyWitnessCounts (..)
@@ -2711,6 +2711,28 @@ instance forall era. IsRecentEra era => Arbitrary (PartialTx era) where
         shrinkCardanoApiTx = case recentEra @era of
             RecentEraBabbage -> shrinkTxBabbage
             RecentEraConway -> \_ -> [] -- no shrinker implemented yet
+
+instance forall era. IsRecentEra era => Arbitrary (ResolvedTx era) where
+    arbitrary = do
+        tx <- CardanoApi.genTxForBalancing $ cardanoEra @era
+        utxoForTx <- genUTxOForTx tx
+        utxoExtra <- genUTxOExtra
+        let utxoCombined = utxoForTx <> utxoExtra
+        pure $ ResolvedTx
+            (fromCardanoApiUTxO utxoCombined)
+            (fromCardanoApiTx tx)
+      where
+        genUTxOExtra = undefined
+          where
+            genTxIn = CardanoApi.genTxIn
+        genUTxOForTx tx =
+            CardanoApi.UTxO . Map.fromList <$>
+            mapM (\i -> (i,) <$> genTxOut) (txInputs tx)
+        genTxOut =
+            CardanoApi.genTxOut (cardanoEra @era)
+        txInputs tx = fst <$> CardanoApi.txIns content
+          where
+            CardanoApi.Tx (CardanoApi.TxBody content) _ = tx
 
 instance Arbitrary StdGenSeed  where
     arbitrary = StdGenSeed . fromIntegral @Int <$> arbitrary
