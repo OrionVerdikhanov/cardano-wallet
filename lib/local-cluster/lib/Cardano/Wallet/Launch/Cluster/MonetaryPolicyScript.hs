@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Cardano.Wallet.Launch.Cluster.MonetaryPolicyScript
     ( genMonetaryPolicyScript
@@ -20,7 +21,7 @@ import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
     )
 import Control.Monad.IO.Class
     ( MonadIO (..)
@@ -38,8 +39,11 @@ import Data.Generics.Labels
 import Data.Text
     ( Text
     )
-import System.FilePath
-    ( (<.>)
+import Path
+    ( addExtension
+    , parseRelFile
+    , relfile
+    , toFilePath
     , (</>)
     )
 import UnliftIO.Exception
@@ -56,16 +60,16 @@ genMonetaryPolicyScript
     :: ClusterM (String, (String, String))
 genMonetaryPolicyScript = do
     outputDir <- asks cfgClusterDir
-    let policyPub = pathOf outputDir </> "policy.pub"
-    let policyPrv = pathOf outputDir </> "policy.prv"
+    let policyPub = outputDir </> [relfile|policy.pub|]
+    let policyPrv = outputDir </> [relfile|policy.prv|]
 
     cli
         [ "address"
         , "key-gen"
         , "--verification-key-file"
-        , policyPub
+        , toFilePath policyPub
         , "--signing-key-file"
-        , policyPrv
+        , toFilePath policyPrv
         ]
     skey <- liftIO $ T.unpack <$> readKeyFromFile policyPrv
     vkeyHash <-
@@ -73,7 +77,7 @@ genMonetaryPolicyScript = do
             [ "address"
             , "key-hash"
             , "--payment-verification-key-file"
-            , policyPub
+            , toFilePath policyPub
             ]
     script <- writeMonetaryPolicyScriptFile vkeyHash
     policyId <-
@@ -81,7 +85,7 @@ genMonetaryPolicyScript = do
             [ "transaction"
             , "policyid"
             , "--script-file"
-            , pathOf script
+            , toFilePath script
             ]
 
     pure (policyId, (skey, vkeyHash))
@@ -89,22 +93,26 @@ genMonetaryPolicyScript = do
 writeMonetaryPolicyScriptFile
     :: String
     -- ^ The script verification key hash
-    -> ClusterM (FileOf "policy-script")
+    -> ClusterM (AbsFileOf "policy-script")
     -- ^ Returns the filename written
 writeMonetaryPolicyScriptFile keyHash = do
     outputDir <- asks cfgClusterDir
-    let scriptFile = pathOf outputDir </> keyHash <.> "script"
-    liftIO $ Aeson.encodeFile scriptFile
+    keyHashFile <- parseRelFile keyHash >>= addExtension ".script"
+    let scriptFile = outputDir </> keyHashFile
+    liftIO
+        $ Aeson.encodeFile (toFilePath scriptFile)
         $ object
             [ "type" .= Aeson.String "sig"
             , "keyHash" .= keyHash
             ]
-    pure $ FileOf scriptFile
+    pure scriptFile
 
 -- | Dig in to a @cardano-cli@ TextView key file to get the hex-encoded key.
-readKeyFromFile :: FilePath -> IO Text
+readKeyFromFile :: AbsFileOf x -> IO Text
 readKeyFromFile f = do
-    textView <- either throwString pure =<< Aeson.eitherDecodeFileStrict' f
+    textView <-
+        either throwString pure
+            =<< Aeson.eitherDecodeFileStrict' (toFilePath f)
     either throwString pure
         $ Aeson.parseEither
             (Aeson.withObject "TextView" (.: "cborHex"))

@@ -1,7 +1,10 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Cardano.Wallet.Launch.Cluster.Node.Relay
     ( withRelayNode
@@ -19,11 +22,8 @@ import Cardano.Wallet.Launch.Cluster.ClusterM
     , askNodeDir
     , bracketTracer'
     )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment (..)
-    )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( RelDirOf
     )
 import Cardano.Wallet.Launch.Cluster.Logging
     ( NodeId (..)
@@ -50,8 +50,15 @@ import Control.Monad.Reader
 import Data.Tagged
     ( Tagged (..)
     )
+import Path
+    ( fromAbsDir
+    , fromAbsFile
+    , reldir
+    , toFilePath
+    , (</>)
+    )
 import System.Directory
-    ( createDirectory
+    ( createDirectoryIfMissing
     )
 
 -- | Launches a @cardano-node@ with the given configuration which will not forge
@@ -67,19 +74,19 @@ import System.Directory
 withRelayNode
     :: NodeParams
     -- ^ Parameters used to generate config files.
-    -> NodePathSegment
+    -> RelDirOf "node"
     -- ^ Path segment for the node to add to the cluster directory.
     -> (RunningNode -> ClusterM a)
     -- ^ Callback function with socket path
     -> ClusterM a
-withRelayNode params nodeSegment@(NodePathSegment name) onClusterStart = do
-    nodeDir' <- askNodeDir nodeSegment
+withRelayNode params nodeSegment onClusterStart = do
+    let name = toFilePath nodeSegment
+    relayDir <- askNodeDir nodeSegment
     let NodeParams genesisFiles hardForks (port, peers) logCfg _ = params
     bracketTracer' "withRelayNode" $ do
-        liftIO $ createDirectory nodeDir'
-
+        liftIO $ createDirectoryIfMissing True $ fromAbsDir relayDir
         let logCfg' = setLoggingName name logCfg
-        (config, genesisData, vd) <-
+        (nodeConfig, genesisData, vd) <-
             genNodeConfig
                 nodeSegment
                 (Tagged @"node-name" "-relay")
@@ -87,13 +94,12 @@ withRelayNode params nodeSegment@(NodePathSegment name) onClusterStart = do
                 hardForks
                 logCfg'
         topology <- genTopology nodeSegment peers
-
         let cfg =
                 CardanoNodeConfig
-                    { nodeDir = nodeDir'
-                    , nodeConfigFile = pathOf config
-                    , nodeTopologyFile = pathOf topology
-                    , nodeDatabaseDir = "db"
+                    { nodeDir = fromAbsDir relayDir
+                    , nodeConfigFile = fromAbsFile nodeConfig
+                    , nodeTopologyFile = fromAbsFile topology
+                    , nodeDatabaseDir = fromAbsDir $ relayDir </> [reldir|db|]
                     , nodeDlgCertFile = Nothing
                     , nodeSignKeyFile = Nothing
                     , nodeOpCertFile = Nothing
@@ -102,9 +108,10 @@ withRelayNode params nodeSegment@(NodePathSegment name) onClusterStart = do
                     , nodePort = Just (NodePort port)
                     , nodeLoggingHostname = Just name
                     , nodeExecutable = Nothing
-                    , nodeOutputFile = nodeParamsOutputFile params
+                    , nodeOutputFile = fromAbsFile <$> nodeParamsOutputFile params
                     }
 
-        let onClusterStart' socket = onClusterStart
-                $ RunningNode socket genesisData vd
+        let onClusterStart' socket =
+                onClusterStart
+                    $ RunningNode socket genesisData vd
         withCardanoNodeProcess RelayNode cfg onClusterStart'

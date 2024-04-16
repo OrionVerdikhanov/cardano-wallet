@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -37,10 +38,10 @@ import Cardano.Wallet.Launch.Cluster.ClusterM
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
-    , NodePathSegment
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
+    , RelDirOf
     )
 import Cardano.Wallet.Launch.Cluster.GenesisFiles
     ( GenesisFiles (..)
@@ -77,8 +78,11 @@ import Ouroboros.Network.Magic
 import Ouroboros.Network.NodeToClient
     ( NodeToClientVersionData (..)
     )
-import System.FilePath
-    ( (</>)
+import Path
+    ( fromAbsFile
+    , parseRelFile
+    , relfile
+    , (</>)
     )
 
 import qualified Data.Aeson as Aeson
@@ -88,7 +92,7 @@ import qualified Data.Text as T
 import qualified Data.Yaml as Yaml
 
 genNodeConfig
-    :: NodePathSegment
+    :: RelDirOf "node"
     -- ^ A top-level directory where to put the configuration.
     -> Tagged "node-name" String -- Node name
     -> GenesisFiles
@@ -98,7 +102,7 @@ genNodeConfig
     -> LogFileConfig
     -- ^ Minimum severity level for logging and optional /extra/ logging output
     -> ClusterM
-        ( FileOf "node-config"
+        ( AbsFileOf "node-config"
         , ShelleyGenesis StandardCrypto
         , NodeToClientVersionData
         )
@@ -130,13 +134,13 @@ genNodeConfig nodeSegment name genesisFiles clusterEra logCfg = do
                     [ Just ("cardano-node.log", severity)
                     , (,extraSev) . T.pack <$> mExtraLogFile
                     ]
-
-    let poolNodeConfig =
-            poolDir </> ("node" <> untag name <> "-config.yaml")
+    nodeConfigFile <- parseRelFile $ "node" <> untag name <> "-config.yaml"
+    let poolNodeConfig = poolDir </> nodeConfigFile
     liftIO $ traceWith cfgTracer $ MsgInfo
         $ "Generating node config: " <> T.pack (show poolNodeConfig)
     liftIO
-        $ Yaml.decodeFileThrow (pathOf cfgClusterConfigs </> "node-config.json")
+        $ Yaml.decodeFileThrow
+            (fromAbsFile $ cfgClusterConfigs </> [relfile|node-config.json|])
             >>= withAddedKey "ShelleyGenesisFile" shelleyGenesis
             >>= withAddedKey "ByronGenesisFile" byronGenesis
             >>= withAddedKey "AlonzoGenesisFile" alonzoGenesis
@@ -145,13 +149,13 @@ genNodeConfig nodeSegment name genesisFiles clusterEra logCfg = do
             >>= withAddedKey "minSeverity" Debug
             >>= withScribes scribes
             >>= withObject (addMinSeverityStdout severity)
-            >>= Yaml.encodeFile poolNodeConfig
+            >>= Yaml.encodeFile (fromAbsFile poolNodeConfig)
 
     -- Parameters
-    genesisData <- Yaml.decodeFileThrow shelleyGenesis
+    genesisData <- Yaml.decodeFileThrow $ fromAbsFile shelleyGenesis
     let networkMagic = NetworkMagic $ sgNetworkMagic genesisData
     pure
-        ( FileOf @"node-config" poolNodeConfig
+        ( poolNodeConfig
         , genesisData
         , NodeToClientVersionData{networkMagic, query = False}
         )

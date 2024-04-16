@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Wallet.Launch.Cluster.Node.GenTopology
@@ -12,11 +13,9 @@ import Cardano.Wallet.Launch.Cluster.ClusterM
     ( ClusterM
     , askNodeDir
     )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment
-    )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
+    , RelDirOf
     )
 import Control.Monad.Reader
     ( MonadIO (..)
@@ -24,24 +23,26 @@ import Control.Monad.Reader
 import Data.Aeson
     ( (.=)
     )
-import System.FilePath
-    ( (</>)
+import Path
+    ( fromAbsFile
+    , relfile
+    , (</>)
     )
 
 import qualified Data.Aeson as Aeson
 
 -- | Generate a topology file from a list of peers.
 genTopology
-    :: NodePathSegment
+    :: RelDirOf "node"
     -> [Int]
-    -> ClusterM (FileOf "topology")
+    -> ClusterM (AbsFileOf "topology")
 genTopology nodeSegment peers = do
     nodeDir <- askNodeDir nodeSegment
-    let file = nodeDir </> "node.topology"
+    let file = nodeDir </> [relfile|node.topology|]
     liftIO
-        $ Aeson.encodeFile file
+        $ Aeson.encodeFile (fromAbsFile file)
         $ Aeson.object ["Producers" .= map encodePeer peers]
-    pure $ FileOf @"topology" file
+    pure file
   where
     encodePeer :: Int -> Aeson.Value
     encodePeer port =

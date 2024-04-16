@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
@@ -21,10 +22,10 @@ import Cardano.BM.Extra
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
-    , NodePathSegment (..)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsDirOf
+    , RelDirOf
     )
 import Cardano.Wallet.Launch.Cluster.Logging
     ( ClusterLog (..)
@@ -36,7 +37,8 @@ import Control.Monad.Reader
     , asks
     )
 import Control.Monad.Trans.Resource
-    ( MonadUnliftIO
+    ( MonadThrow
+    , MonadUnliftIO
     )
 import Control.Tracer
     ( contramap
@@ -45,7 +47,7 @@ import Control.Tracer
 import Data.Text
     ( Text
     )
-import System.FilePath
+import Path
     ( (</>)
     )
 
@@ -59,6 +61,7 @@ newtype ClusterM a = ClusterM
         , MonadReader Config
         , MonadUnliftIO
         , MonadFail
+        , MonadThrow
         )
 
 traceClusterLog :: ClusterLog -> ClusterM ()
@@ -83,7 +86,7 @@ bracketTracer' name f = do
         $ bracketTracer (contramap (MsgBracket name) cfgTracer)
         $ withConfig f
 
-askNodeDir :: NodePathSegment -> ClusterM FilePath
-askNodeDir (NodePathSegment nodeSegment) = do
+askNodeDir :: RelDirOf "node" -> ClusterM (AbsDirOf "node")
+askNodeDir nodeSegment = do
     Config{..} <- ask
-    pure $ pathOf cfgClusterDir </> nodeSegment
+    pure $ cfgClusterDir </> nodeSegment

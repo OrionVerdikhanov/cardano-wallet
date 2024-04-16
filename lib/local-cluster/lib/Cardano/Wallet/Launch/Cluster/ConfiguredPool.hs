@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
@@ -60,14 +61,14 @@ import Cardano.Wallet.Launch.Cluster.ClusterM
     )
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
-    , NodePathSegment (..)
     )
 import Cardano.Wallet.Launch.Cluster.Faucet
     ( faucetAmt
     , takeFaucet
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
+    , RelDirOf
     , changeFileOf
     )
 import Cardano.Wallet.Launch.Cluster.Logging
@@ -148,11 +149,16 @@ import Data.Word.Odd
 import GHC.TypeLits
     ( Symbol
     )
+import Path
+    ( fromAbsDir
+    , fromAbsFile
+    , parseRelDir
+    , reldir
+    , relfile
+    , (</>)
+    )
 import System.Directory
     ( createDirectoryIfMissing
-    )
-import System.FilePath
-    ( (</>)
     )
 import Test.Utils.StaticServer
     ( withStaticServer
@@ -198,99 +204,95 @@ configurePools metadataServer =
 
 -- | Create a key pair for a node KES operational key
 genKesKeyPair
-    :: NodePathSegment
-    -> ClusterM (FileOf "kes-prv", FileOf "kes-pub")
+    :: RelDirOf "node"
+    -> ClusterM (AbsFileOf "kes-prv", AbsFileOf "kes-pub")
 genKesKeyPair nodeSegment = do
     poolDir <- askNodeDir nodeSegment
-    let kesPrv = FileOf @"kes-prv" $ poolDir </> "kes.prv"
-    let kesPub = FileOf @"kes-pub" $ poolDir </> "kes.pub"
+    let kesPrv = poolDir </> [relfile|kes.prv|]
+    let kesPub = poolDir </> [relfile|kes.pub|]
     cli
         [ "node"
         , "key-gen-KES"
         , "--verification-key-file"
-        , pathOf kesPub
+        , fromAbsFile kesPub
         , "--signing-key-file"
-        , pathOf kesPrv
+        , fromAbsFile kesPrv
         ]
     pure (kesPrv, kesPub)
 
 -- | Create a key pair for a node VRF operational key
 genVrfKeyPair
-    :: NodePathSegment
-    -> ClusterM (FileOf "vrf-prv", FileOf "vrf-pub")
+    :: RelDirOf "node"
+    -> ClusterM (AbsFileOf "vrf-prv", AbsFileOf "vrf-pub")
 genVrfKeyPair nodeSegment = do
     poolDir <- askNodeDir nodeSegment
-    let vrfPrv = FileOf @"vrf-prv" $ poolDir </> "vrf.prv"
-    let vrfPub = FileOf @"vrf-pub" $ poolDir </> "vrf.pub"
+    let vrfPrv = poolDir </> [relfile|vrf.prv|]
+    let vrfPub = poolDir </> [relfile|vrf.pub|]
     cli
         [ "node"
         , "key-gen-VRF"
         , "--verification-key-file"
-        , pathOf vrfPub
+        , fromAbsFile vrfPub
         , "--signing-key-file"
-        , pathOf vrfPrv
+        , fromAbsFile vrfPrv
         ]
     pure (vrfPrv, vrfPub)
 
 -- | Write a key pair for a node operator's offline key and a new certificate
 -- issue counter
 writeOperatorKeyPair
-    :: NodePathSegment
+    :: RelDirOf "node"
     -> PoolRecipe
     -> ClusterM
-        ( FileOf "op-prv"
-        , FileOf "op-pub"
-        , FileOf "op-cnt"
+        ( AbsFileOf "op-prv"
+        , AbsFileOf "op-pub"
+        , AbsFileOf "op-cnt"
         )
 writeOperatorKeyPair nodeSegment recipe = do
     poolDir <- askNodeDir nodeSegment
     let (_pId, pub, prv, count) = operatorKeys recipe
-    traceClusterLog $ MsgGenOperatorKeyPair poolDir
+    traceClusterLog $ MsgGenOperatorKeyPair $ fromAbsDir poolDir
 
-    let opPub = poolDir </> "op.pub"
-    let opPrv = poolDir </> "op.prv"
-    let opCount = poolDir </> "op.count"
+    let opPub = poolDir </> [relfile|op.pub|]
+    let opPrv = poolDir </> [relfile|op.prv|]
+    let opCount = poolDir </> [relfile|op.count|]
 
     liftIO $ do
-        Aeson.encodeFile opPub pub
-        Aeson.encodeFile opPrv prv
-        Aeson.encodeFile opCount count
+        Aeson.encodeFile (fromAbsFile opPub) pub
+        Aeson.encodeFile (fromAbsFile opPrv) prv
+        Aeson.encodeFile (fromAbsFile opCount) count
 
-    pure
-        ( FileOf @"op-prv" opPrv
-        , FileOf @"op-pub" opPub
-        , FileOf @"op-cnt" opCount
-        )
+    pure ( opPrv , opPub , opCount)
 
 -- | Issue a node operational certificate
 issueOpCert
-    :: NodePathSegment
-    -> FileOf "kes-pub"
-    -> FileOf "op-prv"
-    -> FileOf "op-cnt"
-    -> ClusterM FilePath
+    :: RelDirOf "node"
+    -> AbsFileOf "kes-pub"
+    -> AbsFileOf "op-prv"
+    -> AbsFileOf "op-cnt"
+    -> ClusterM (AbsFileOf "op-cert")
 issueOpCert nodeSegment kesPub opPrv opCount = do
     poolDir <- askNodeDir nodeSegment
-    let file = poolDir </> "op.cert"
+    let file = poolDir </> [relfile|op.cert|]
     cli
         [ "node"
         , "issue-op-cert"
         , "--kes-verification-key-file"
-        , pathOf kesPub
+        , fromAbsFile kesPub
         , "--cold-signing-key-file"
-        , pathOf opPrv
+        , fromAbsFile opPrv
         , "--operational-certificate-issue-counter-file"
-        , pathOf opCount
+        , fromAbsFile opCount
         , "--kes-period"
         , "0"
         , "--out-file"
-        , file
+        , fromAbsFile file
         ]
     pure file
 
 -- | Create a stake address key pair
 genStakeAddrKeyPair
-    :: (FileOf "stake-prv", FileOf "stake-pub")
+    :: (AbsFileOf "stake-prv", AbsFileOf "stake-pub")
     -> ClusterM ()
 genStakeAddrKeyPair (stakePrv, stakePub) = do
     Config{..} <- ask
@@ -299,9 +301,9 @@ genStakeAddrKeyPair (stakePrv, stakePub) = do
         , "stake-address"
         , "key-gen"
         , "--verification-key-file"
-        , pathOf stakePub
+        , fromAbsFile stakePub
         , "--signing-key-file"
-        , pathOf stakePrv
+        , fromAbsFile stakePrv
         ]
 
 readFailVerificationKeyOrFile
@@ -310,18 +312,18 @@ readFailVerificationKeyOrFile
        , SerialiseAsBech32 (VerificationKey keyrole)
        )
     => AsType keyrole
-    -> FileOf s
+    -> AbsFileOf s
     -> ClusterM (VerificationKey keyrole)
 readFailVerificationKeyOrFile role op =
     liftIO
         $ either (error . show) id
             <$> readVerificationKeyOrFile
                 role
-                (VerificationKeyFilePath $ File $ pathOf op)
+                (VerificationKeyFilePath $ File $ fromAbsFile op)
 
 stakePoolIdFromOperatorVerKey
     :: HasCallStack
-    => FileOf "op-pub"
+    => AbsFileOf "op-pub"
     -> ClusterM (Ledger.KeyHash 'Ledger.StakePool (StandardCrypto))
 stakePoolIdFromOperatorVerKey opPub = do
     stakePoolVerKey <- readFailVerificationKeyOrFile AsStakePoolKey opPub
@@ -332,7 +334,7 @@ stakePoolIdFromOperatorVerKey opPub = do
 
 poolVrfFromFile
     :: HasCallStack
-    => FileOf "vrf-pub"
+    => AbsFileOf "vrf-pub"
     -> ClusterM (Ledger.Hash StandardCrypto (Ledger.VerKeyVRF StandardCrypto))
 poolVrfFromFile vrfPub = do
     stakePoolVerKey <- readFailVerificationKeyOrFile AsVrfKey vrfPub
@@ -343,7 +345,7 @@ poolVrfFromFile vrfPub = do
 
 stakingKeyHashFromFile
     :: HasCallStack
-    => FileOf "stake-pub"
+    => AbsFileOf "stake-pub"
     -> ClusterM (Ledger.KeyHash 'Ledger.Staking StandardCrypto)
 stakingKeyHashFromFile stakePub = do
     stakePoolVerKey <- readFailVerificationKeyOrFile AsStakeKey stakePub
@@ -354,7 +356,7 @@ stakingKeyHashFromFile stakePub = do
 
 stakingAddrFromVkFile
     :: HasCallStack
-    => FileOf "stake-pub"
+    => AbsFileOf "stake-pub"
     -> ClusterM (Ledger.Addr StandardCrypto)
 stakingAddrFromVkFile stakePub = do
     stakePoolVerKey <- readFailVerificationKeyOrFile AsStakeKey stakePub
@@ -372,13 +374,13 @@ stakingAddrFromVkFile stakePub = do
             (Ledger.StakeRefBase (Ledger.KeyHashObj delegKH))
 
 preparePoolRetirement
-    :: NodePathSegment
-    -> [FileOf "retirement-cert"]
-    -> ClusterM (FileOf "retirement-tx", FileOf "faucet-prv")
+    :: RelDirOf "node"
+    -> [AbsFileOf "retirement-cert"]
+    -> ClusterM (AbsFileOf "retirement-tx", AbsFileOf "faucet-prv")
 preparePoolRetirement nodeSegment certs = do
     Config{..} <- ask
     poolDir <- askNodeDir nodeSegment
-    let file = poolDir </> "tx.raw"
+    let file = poolDir </> [relfile|tx.raw|]
     (faucetInput, faucetPrv) <- takeFaucet
     cli
         $ [ clusterEraToString cfgLastHardFork
@@ -391,33 +393,33 @@ preparePoolRetirement nodeSegment certs = do
           , "--fee"
           , show faucetAmt
           , "--out-file"
-          , file
+          , fromAbsFile file
           ]
-            ++ mconcat ((\cert -> ["--certificate-file", pathOf cert]) <$> certs)
+            ++ mconcat ((\cert -> ["--certificate-file", fromAbsFile cert]) <$> certs)
 
-    pure (FileOf file, faucetPrv)
+    pure (file, faucetPrv)
 
 issuePoolRetirementCert
-    :: NodePathSegment
-    -> FileOf "op-pub"
+    :: RelDirOf "node"
+    -> AbsFileOf "op-pub"
     -> Word31
-    -> ClusterM (FileOf "retirement-cert")
+    -> ClusterM (AbsFileOf "retirement-cert")
 issuePoolRetirementCert nodeSegment opPub retirementEpoch = do
     lastHardFork <- asks cfgLastHardFork
     poolDir <- askNodeDir nodeSegment
-    let file = poolDir </> "pool-retirement.cert"
+    let file = poolDir </> [relfile|retirement.cert|]
     cli
         [ clusterEraToString lastHardFork
         , "stake-pool"
         , "deregistration-certificate"
         , "--cold-verification-key-file"
-        , pathOf opPub
+        , fromAbsFile opPub
         , "--epoch"
         , show retirementEpoch
         , "--out-file"
-        , file
+        , fromAbsFile file
         ]
-    pure $ FileOf @"retirement-cert" file
+    pure file
 
 configurePool
     :: HasCallStack
@@ -432,22 +434,22 @@ configurePool metadataServer recipe = do
     -- Use pool-specific dir
     let name = "pool-" <> show i
         nodeId = PoolNode i
-        nodeSegment = NodePathSegment name
+    nodeSegment <- parseRelDir name
     poolDir <- askNodeDir nodeSegment
     liftIO $ traceWith cfgTracer
         $ MsgInfo $ "Configuring " <> T.pack (show poolDir)
-    liftIO $ createDirectoryIfMissing False poolDir
+    liftIO $ createDirectoryIfMissing False $ fromAbsDir poolDir
 
     -- Generate/assign keys
     (vrfPrv, vrfPub) <- genVrfKeyPair nodeSegment
     (kesPrv, kesPub) <- genKesKeyPair nodeSegment
     (opPrv, opPub, opCount) <- writeOperatorKeyPair nodeSegment recipe
     opCert <- issueOpCert nodeSegment kesPub opPrv opCount
-    let ownerPub = FileOf @"stake-pub" $ poolDir </> "stake.pub"
-    let ownerPrv = FileOf @"stake-prv" $ poolDir </> "stake.prv"
+    let ownerPub = poolDir </> [relfile|stake.pub|]
+    let ownerPrv = poolDir </> [relfile|stake.prv|]
     genStakeAddrKeyPair (ownerPrv, ownerPub)
 
-    let metadataUrl = T.pack $ urlFromPoolIndex metadataServer i
+    metadataUrl <- liftIO $ T.pack <$> urlFromPoolIndex metadataServer i
     let metadataBytes = Aeson.encode metadata
 
         registerViaShelleyGenesis = do
@@ -520,12 +522,14 @@ configurePool metadataServer recipe = do
                     hardForks
                     (port, peers)
                     logCfg
-                    nodeOutput = nodeParams
+                    nodeOutput
+                    = nodeParams
             let logCfg' = setLoggingName name logCfg
 
             topology <- genTopology nodeSegment peers
-            liftIO $ withStaticServer poolDir $ \url -> do
-                traceWith cfgTracer $ MsgStartedStaticServer poolDir url
+            liftIO $ withStaticServer (fromAbsDir poolDir) $ \url -> do
+                traceWith cfgTracer
+                    $ MsgStartedStaticServer (fromAbsDir poolDir) url
 
                 (nodeConfig, genesisData, vd) <-
                     withConfig
@@ -538,21 +542,23 @@ configurePool metadataServer recipe = do
 
                 let cfg =
                         CardanoNodeConfig
-                            { nodeDir = "."
-                            , nodeConfigFile = pathOf @"node-config" nodeConfig
-                            , nodeTopologyFile = pathOf @"topology" topology
-                            , nodeDatabaseDir = poolDir </> "db"
+                            { nodeDir = fromAbsDir poolDir
+                            , nodeConfigFile = fromAbsFile nodeConfig
+                            , nodeTopologyFile = fromAbsFile topology
+                            , nodeDatabaseDir = fromAbsDir
+                                $ poolDir </> [reldir|db|]
                             , nodeDlgCertFile = Nothing
                             , nodeSignKeyFile = Nothing
-                            , nodeOpCertFile = Just opCert
-                            , nodeKesKeyFile = Just $ pathOf @"kes-prv" kesPrv
-                            , nodeVrfKeyFile = Just $ pathOf @"vrf-prv" vrfPrv
+                            , nodeOpCertFile = Just $ fromAbsFile opCert
+                            , nodeKesKeyFile = Just $ fromAbsFile kesPrv
+                            , nodeVrfKeyFile = Just $ fromAbsFile vrfPrv
                             , nodePort = Just (NodePort port)
                             , nodeLoggingHostname = Just name
                             , nodeExecutable = Nothing
-                            , nodeOutputFile = nodeOutput
+                            , nodeOutputFile = fromAbsFile <$> nodeOutput
                             }
-
+                traceWith cfgTracer $ MsgInfo $ "Cardano node config: "
+                    <> T.pack (show cfg)
                 withConfig
                     $ withCardanoNodeProcess nodeId cfg
                     $ \socket -> action $ RunningNode socket genesisData vd

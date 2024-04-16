@@ -18,7 +18,12 @@ module Cardano.Wallet.Launch.Cluster.CommandLine
 import Prelude
 
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsDirOf
+    , AbsFileOf
+    , Absolutize (..)
+    , DirOf
+    , FileOf
+    , mkAbsolutize
     )
 import Cardano.Wallet.Network.Ports
     ( validPorts
@@ -34,6 +39,7 @@ import Network.Wai.Handler.Warp
     )
 import Options.Applicative
     ( Parser
+    , ReadM
     , auto
     , command
     , eitherReader
@@ -47,8 +53,13 @@ import Options.Applicative
     , option
     , optional
     , progDesc
-    , strOption
+    , str
     , (<**>)
+    )
+import Path
+    ( Abs
+    , parseSomeDir
+    , parseSomeFile
     )
 
 data ClusterControl = ClusterControl
@@ -63,22 +74,23 @@ newtype Monitoring = Monitoring
     deriving stock (Show)
 
 data CommandLineOptions = CommandLineOptions
-    { clusterConfigsDir :: FileOf "cluster-configs"
-    , faucetFundsFile :: FileOf "faucet-funds"
-    , clusterDir :: Maybe (FileOf "cluster")
+    { clusterConfigsDir :: AbsDirOf "cluster-configs"
+    , faucetFundsFile :: AbsFileOf "faucet-funds"
+    , clusterDir :: Maybe (AbsDirOf "cluster")
     , monitoring :: Maybe Monitoring
     , clusterControl :: Maybe ClusterControl
-    , clusterLogs :: Maybe (FileOf "cluster-logs")
+    , clusterLogs :: Maybe (AbsFileOf "cluster-logs")
     }
     deriving stock (Show)
 
 parseCommandLineOptions :: IO CommandLineOptions
 parseCommandLineOptions = do
+    absolutize :: Absolutize <- mkAbsolutize
     let options = clusterControlParser $ do
-            clusterConfigsDir <- clusterConfigsDirParser
-            faucetFundsFile <- faucetFundsParser
-            clusterDir <- clusterDirParser
-            clusterLogs <- clusterLogsParser
+            clusterConfigsDir <- clusterConfigsDirParser absolutize
+            faucetFundsFile <- faucetFundsParser absolutize
+            clusterDir <- clusterDirParser absolutize
+            clusterLogs <- clusterLogsParser absolutize
             monitoring <- monitoringParser
             pure $ \clusterControl -> CommandLineOptions{..}
     execParser
@@ -108,33 +120,53 @@ httpPortParser = do
                 ++ show (last validPorts)
         pure p
 
-clusterConfigsDirParser :: Parser (FileOf "cluster-configs")
-clusterConfigsDirParser =
-    FileOf
-        <$> strOption
-            ( long "cluster-configs"
-                <> metavar "LOCAL_CLUSTER_CONFIGS"
-                <> help "Path to the local cluster configuration directory"
-            )
+clusterConfigsDirParser
+    :: Absolutize
+    -> Parser (AbsDirOf "cluster-configs")
+clusterConfigsDirParser cwd =
+    option
+        (dirParser cwd)
+        ( long "cluster-configs"
+            <> metavar "LOCAL_CLUSTER_CONFIGS"
+            <> help "Path to the local cluster configuration directory"
+        )
 
-faucetFundsParser :: Parser (FileOf "faucet-funds")
-faucetFundsParser =
-    FileOf
-        <$> strOption
-            ( long "faucet-funds"
-                <> metavar "FAUCET_FUNDS"
-                <> help "Path to the faucet funds configuration file"
-            )
+faucetFundsParser
+    :: Absolutize
+    -> Parser (AbsFileOf "faucet-funds")
+faucetFundsParser cwd =
+    option
+        (fileParser cwd)
+        ( long "faucet-funds"
+            <> metavar "FAUCET_FUNDS"
+            <> help "Path to the faucet funds configuration file"
+        )
 
-clusterDirParser :: Parser (Maybe (FileOf "cluster"))
-clusterDirParser =
+clusterDirParser
+    :: Absolutize
+    -> Parser (Maybe (AbsDirOf "cluster"))
+clusterDirParser cwd =
     optional
-        $ FileOf
-            <$> strOption
-                ( long "cluster"
-                    <> metavar "LOCAL_CLUSTER"
-                    <> help "Path to the local cluster directory"
-                )
+        $ option
+            (dirParser cwd)
+            ( long "cluster"
+                <> metavar "LOCAL_CLUSTER"
+                <> help "Path to the local cluster directory"
+            )
+
+dirParser :: Absolutize -> ReadM (DirOf x Abs)
+dirParser (Absolutize cwd) = do
+    p <- str
+    case parseSomeDir p of
+        Nothing -> fail "Invalid directory path"
+        Just p' -> pure $ cwd p'
+
+fileParser :: Absolutize -> ReadM (FileOf x Abs)
+fileParser (Absolutize cwd) = do
+    p <- str
+    case parseSomeFile p of
+        Nothing -> fail "Invalid file path"
+        Just p' -> pure $ cwd p'
 
 tcpPortParser :: Parser Port
 tcpPortParser = do
@@ -178,10 +210,12 @@ renderPullingMode = \case
     PullingState -> "pulling"
 
 renderControl :: Maybe ClusterControl -> [String]
-renderControl (Just ClusterControl{..})  =
+renderControl (Just ClusterControl{..}) =
     [ "control"
-    , "--control-port", show clusterControlPort
-    , "--pulling-mode", renderPullingMode pullingMode
+    , "--control-port"
+    , show clusterControlPort
+    , "--pulling-mode"
+    , renderPullingMode pullingMode
     ]
 renderControl Nothing =
     [ "no-control"
@@ -205,15 +239,17 @@ clusterControlParser f =
             $ info (f <*> pure Nothing)
             $ progDesc "Disable control"
 
-clusterLogsParser :: Parser (Maybe (FileOf "cluster-logs"))
-clusterLogsParser =
+clusterLogsParser
+    :: Absolutize
+    -> Parser (Maybe (AbsFileOf "cluster-logs"))
+clusterLogsParser cwd =
     optional
-        $ FileOf
-            <$> strOption
-                ( long "cluster-logs"
-                    <> metavar "LOCAL_CLUSTER_LOGS"
-                    <> help "Path to the local cluster logs file"
-                )
+        $ option
+            (fileParser cwd)
+            ( long "cluster-logs"
+                <> metavar "CLUSTER_LOGS"
+                <> help "Path to the cluster logs file"
+            )
 
 -- renderCommandLineOptions :: CommandLineOptions -> [String]
 -- renderCommandLineOptions CommandLineOptions{..} =

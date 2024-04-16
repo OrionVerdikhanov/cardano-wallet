@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Prelude
@@ -25,12 +26,6 @@ import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment (NodePathSegment)
-    )
-import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
-    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     ( withMonitoring
     )
@@ -51,6 +46,10 @@ import Control.Monad.Trans
     )
 import Main.Utf8
     ( withUtf8
+    )
+import Path
+    ( parseAbsDir
+    , reldir
     )
 import System.Environment.Extended
     ( isEnvSet
@@ -130,7 +129,7 @@ main = withUtf8 $ do
         Cluster.logFileConfigFromEnv
             $ Just
             $ Cluster.clusterEraToString clusterEra
-    CommandLineOptions
+    o@CommandLineOptions
         { clusterConfigsDir
         , faucetFundsFile
         , clusterDir
@@ -139,29 +138,32 @@ main = withUtf8 $ do
         , clusterControl
         } <-
         parseCommandLineOptions
-    funds <- retrieveFunds $ pathOf faucetFundsFile
+    funds <- retrieveFunds faucetFundsFile
     flip runContT pure $ do
         trace <- withMonitoring clusterControl monitoring
         clusterPath <-
             case clusterDir of
-                Just (FileOf path) -> pure path
-                Nothing ->
-                    ContT
-                        $ withSystemTempDir tr "test-cluster" skipCleanup
+                Just path -> pure path
+                Nothing -> do
+                            d <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
+                            parseAbsDir d
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
                     , cfgLastHardFork = clusterEra
                     , cfgNodeLogging
-                    , cfgClusterDir = FileOf clusterPath
+                    , cfgClusterDir = clusterPath
                     , cfgClusterConfigs = clusterConfigsDir
                     , cfgTestnetMagic = Cluster.TestnetMagic 42
                     , cfgShelleyGenesisMods = [over #sgSlotLength \_ -> 0.2]
                     , cfgTracer = stdoutTextTracer
                     , cfgNodeOutputFile = Nothing
-                    , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgRelayNodePath = [reldir|relay|]
                     , cfgClusterLogFile = clusterLogs
                     }
+
+        liftIO $ putStrLn $ "Starting cluster with config: "
+            <> show o
         void $ ContT $ Cluster.withCluster trace clusterCfg funds
 
         liftIO $ threadDelay maxBound -- wait for Ctrl+C

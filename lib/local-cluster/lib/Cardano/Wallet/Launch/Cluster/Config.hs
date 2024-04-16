@@ -27,7 +27,9 @@ import Cardano.Wallet.Launch.Cluster.ClusterEra
     ( ClusterEra
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf
+    ( AbsDirOf
+    , AbsFileOf
+    , RelDirOf
     )
 import Cardano.Wallet.Launch.Cluster.Logging
     ( ClusterLog (..)
@@ -56,9 +58,9 @@ data Config = Config
     -- ^ Which era to use.
     , cfgNodeLogging :: LogFileConfig
     -- ^ Log severity for node.
-    , cfgClusterDir :: FileOf "cluster"
+    , cfgClusterDir :: AbsDirOf "cluster"
     -- ^ Root directory for cluster data.
-    , cfgClusterConfigs :: FileOf "cluster-configs"
+    , cfgClusterConfigs :: AbsDirOf "cluster-configs"
     -- ^ Directory containing data for cluster setup.
     , cfgTestnetMagic :: TestnetMagic
     -- ^ Testnet magic to use.
@@ -66,11 +68,11 @@ data Config = Config
     -- ^ Shelley genesis modifications to apply.
     , cfgTracer :: Tracer IO ClusterLog
     -- ^ Tracer for logging.
-    , cfgNodeOutputFile :: Maybe (FileOf "node-output")
+    , cfgNodeOutputFile :: Maybe (AbsFileOf "node-output")
     -- ^ File to write node output to.
-    , cfgRelayNodePath :: NodePathSegment
+    , cfgRelayNodePath :: RelDirOf "relay-node"
     -- ^ Path segment for relay node.
-    , cfgClusterLogFile :: Maybe (FileOf "cluster-logs")
+    , cfgClusterLogFile :: Maybe (AbsFileOf "cluster-logs")
     -- ^ File to write cluster logs to.
     }
 

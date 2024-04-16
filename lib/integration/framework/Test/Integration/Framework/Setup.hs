@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -61,7 +62,6 @@ import Cardano.Wallet.Faucet
 import Cardano.Wallet.Launch.Cluster
     ( ClusterEra (..)
     , FaucetFunds (..)
-    , FileOf (..)
     , LogFileConfig (..)
     , RunningNode (..)
     , clusterEraFromEnv
@@ -70,11 +70,12 @@ import Cardano.Wallet.Launch.Cluster
     , withFaucet
     , withSMASH
     )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment (..)
-    )
 import Cardano.Wallet.Launch.Cluster.Env
     ( nodeOutputFileFromEnv
+    )
+import Cardano.Wallet.Launch.Cluster.FileOf
+    ( AbsDirOf
+    , absolutize
     )
 import Cardano.Wallet.Network.Implementation.Ouroboros
     ( tunedForMainnetPipeliningStrategy
@@ -117,6 +118,7 @@ import Control.Lens
     )
 import Control.Monad
     ( forM_
+    , (>=>)
     )
 import Control.Monad.IO.Class
     ( liftIO
@@ -153,6 +155,15 @@ import Network.HTTP.Client
 import Network.URI
     ( URI
     )
+import Path
+    ( fromAbsDir
+    , fromAbsFile
+    , parseAbsDir
+    , parseSomeDir
+    , reldir
+    , relfile
+    , (</>)
+    )
 import Servant.Client
     ( ClientEnv
     )
@@ -170,9 +181,6 @@ import System.Environment.Extended
     )
 import System.Exit
     ( ExitCode
-    )
-import System.FilePath
-    ( (</>)
     )
 import System.IO.Temp.Extra
     ( SkipCleanup (..)
@@ -224,7 +232,7 @@ import qualified Data.Text as T
 
 -- | Do all the program setup required for integration tests, create a temporary
 -- directory, and pass this info to the main hspec action.
-withTestsSetup :: (FilePath -> (Tracer IO TestsLog, Tracers IO) -> IO a) -> IO a
+withTestsSetup :: (AbsDirOf "cluster-configs" -> (Tracer IO TestsLog, Tracers IO) -> IO a) -> IO a
 withTestsSetup action = do
     -- Handle SIGTERM properly
     installSignalHandlersNoLogging
@@ -240,21 +248,24 @@ withTestsSetup action = do
 
     -- possibly retrieve a directory from the environment
     -- where to report test logs, and modified configuration files
-    testDataDir <-
-        fmap FileOf
-            <$> lookupEnv "INTEGRATION_TEST_DIRECTORY"
+    testDataDir <- do
+            testDir <- lookupEnv "INTEGRATION_TEST_DIRECTORY"
+            mapM (parseSomeDir >=> absolutize) testDir
     withUtf8
         $
         -- This temporary directory will contain logs, and all other data
         -- produced by the integration tests.
-        let run testDir = withTracers testDir $ action testDir
+        let run testDir = withTracers (fromAbsDir testDir) $ action testDir
         in case
             testDataDir of
                 Nothing ->
-                    withSystemTempDir stdoutTextTracer "test" skipCleanup run
-                Just (FileOf dir) -> do
-                    createDirectoryIfMissing True dir
-                    run dir
+                    withSystemTempDir stdoutTextTracer "test" skipCleanup $
+                        \dir -> do
+                            dirPath <- parseAbsDir dir
+                            run dirPath
+                Just dirPath -> do
+                    createDirectoryIfMissing True $ fromAbsDir dirPath
+                    run dirPath
                     -- do not cleanup the directory if it was provided by the user
 
 mkFaucetFunds :: Cluster.TestnetMagic -> FaucetM FaucetFunds
@@ -294,11 +305,11 @@ mkFaucetFunds testnetMagic = do
 
 data TestingCtx = TestingCtx
     { testnetMagic :: Cluster.TestnetMagic
-    , testDir :: FilePath
+    , testDir :: AbsDirOf "test"
     , tr :: Tracer IO TestsLog
     , tracers :: Tracers IO
     , localClusterEra :: ClusterEra
-    , testDataDir :: FileOf "test-data"
+    , testDataDir :: AbsDirOf "test-data"
     }
 
 -- A decorator for the pool database that records all calls to the
@@ -347,7 +358,7 @@ withServer
         bracketTracer' tr "withServer" $ do
             let tr' = Cluster.cfgTracer clusterConfig
             traceWith tr $ MsgInfo "Starting SMASH server ..."
-            withSMASH tr' testDir $ \smashUrl -> do
+            withSMASH tr' (fromAbsDir testDir) $ \smashUrl -> do
                 traceWith tr $ MsgInfo "Starting local cluster ..."
                 withLocalCluster clusterConfig faucetFunds
                     $ onClusterStart
@@ -368,35 +379,36 @@ onClusterStart
     (RunningNode nodeConnection genesisData vData) = do
         let (networkParameters, block0, genesisPools) =
                 fromGenesisData genesisData
-        let db = testDir </> "wallets"
-        createDirectory db
+        let db = testDir </> [reldir|wallets|]
+        createDirectory $ fromAbsDir db
         listen <- walletListenFromEnv envFromText
-        let testMetadata = pathOf testDataDir </> "token-metadata.json"
+        let testMetadata = testDataDir </> [relfile|token-metadata.json|]
         traceWith tr $ MsgInfo "Starting metadata server ..."
-        withMetadataServer (queryServerStatic testMetadata) $ \tokenMetaUrl -> do
-            traceWith tr
-                $ MsgInfo
-                $ "Starting wallet server over "
-                    <> T.pack (show nodeConnection)
-            flip withException (traceWith tr . MsgServerError)
-                $ serveWallet
-                    (NodeSource nodeConnection vData (SyncTolerance 10))
-                    networkParameters
-                    tunedForMainnetPipeliningStrategy
-                    (NTestnet (fromIntegral (sgNetworkMagic genesisData)))
-                    genesisPools
-                    tracers
-                    (Just db)
-                    (Just dbDecorator)
-                    "127.0.0.1"
-                    listen
-                    Nothing
-                    Nothing
-                    (Just tokenMetaUrl)
-                    block0
-                $ \uri -> do
-                    traceWith tr $ MsgInfo "Wallet ready"
-                    callback nodeConnection networkParameters uri
+        withMetadataServer (queryServerStatic $ fromAbsFile testMetadata)
+            $ \tokenMetaUrl -> do
+                traceWith tr
+                    $ MsgInfo
+                    $ "Starting wallet server over "
+                        <> T.pack (show nodeConnection)
+                flip withException (traceWith tr . MsgServerError)
+                    $ serveWallet
+                        (NodeSource nodeConnection vData (SyncTolerance 10))
+                        networkParameters
+                        tunedForMainnetPipeliningStrategy
+                        (NTestnet (fromIntegral (sgNetworkMagic genesisData)))
+                        genesisPools
+                        tracers
+                        (Just $ fromAbsDir db)
+                        (Just dbDecorator)
+                        "127.0.0.1"
+                        listen
+                        Nothing
+                        Nothing
+                        (Just tokenMetaUrl)
+                        block0
+                    $ \uri -> do
+                        traceWith tr $ MsgInfo "Wallet ready"
+                        callback nodeConnection networkParameters uri
 
 -- threadDelay $ 3 * 60 * 1_000_000 -- Wait 3 minutes for the node to start
 -- exitSuccess
@@ -490,19 +502,18 @@ withContext testingCtx@TestingCtx{..} action = do
                     { cfgStakePools = Cluster.defaultPoolConfigs
                     , cfgLastHardFork = era
                     , cfgNodeLogging = LogFileConfig Info Nothing Info
-                    , cfgClusterDir = FileOf @"cluster" testDir
+                    , cfgClusterDir = testDir
                     , cfgClusterConfigs = clusterConfigs
                     , cfgTestnetMagic = testnetMagic
                     , cfgShelleyGenesisMods = []
                     , cfgTracer = contramap MsgCluster tr
                     , cfgNodeOutputFile = nodeOutputFile
-                    , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgRelayNodePath = [reldir|relay|]
                     , cfgClusterLogFile =
                         Just
-                            $ FileOf @"cluster-logs"
-                            $ testDir </> "cluster.logs"
+                            $ testDir </> [relfile|cluster.logs|]
                     }
-        traceWith tr $ MsgInfo $ "Cluster output dir " <> T.pack testDir
+        traceWith tr $ MsgInfo $ "Cluster output dir " <> T.pack (show testDir)
         let dbEventRecorder =
                 recordPoolGarbageCollectionEvents
                     testingCtx

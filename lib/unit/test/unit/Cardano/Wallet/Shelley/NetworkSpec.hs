@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -22,15 +23,11 @@ import Cardano.Wallet.Launch.Cluster
     , ClusterLog (..)
     , Config (..)
     , FaucetFunds (..)
-    , FileOf (..)
     , LogFileConfig (..)
     , RunningNode (..)
     , defaultPoolConfigs
     , localClusterConfigsFromEnv
     , withCluster
-    )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment (..)
     )
 import Cardano.Wallet.Network
     ( NetworkLayer (..)
@@ -75,6 +72,10 @@ import Fmt
     )
 import Ouroboros.Network.NodeToClient
     ( NodeToClientVersionData
+    )
+import Path
+    ( parseAbsDir
+    , reldir
     )
 import System.Environment.Extended
     ( isEnvSet
@@ -318,18 +319,19 @@ withTestNode tr action = do
     skipCleanup <- SkipCleanup <$> isEnvSet "NO_CLEANUP"
     withSystemTempDir (contramap MsgTempDir tr) "network-spec" skipCleanup $
         \dir -> do
+            dirPath <- parseAbsDir dir
             cfgClusterConfigs <- localClusterConfigsFromEnv
             let clusterConfig = Cluster.Config
                     { cfgStakePools = defaultPoolConfigs
                     , cfgLastHardFork = BabbageHardFork
                     , cfgNodeLogging = LogFileConfig Info Nothing Info
-                    , cfgClusterDir = FileOf @"cluster" dir
+                    , cfgClusterDir = dirPath
                     , cfgClusterConfigs
                     , cfgTestnetMagic = Cluster.TestnetMagic 42
                     , cfgShelleyGenesisMods = []
                     , cfgTracer = tr
                     , cfgNodeOutputFile = Nothing
-                    , cfgRelayNodePath = NodePathSegment "relay"
+                    , cfgRelayNodePath = [reldir|relay|]
                     , cfgClusterLogFile = Nothing
                     }
             withCluster nullTracer clusterConfig (FaucetFunds [] [] []) $

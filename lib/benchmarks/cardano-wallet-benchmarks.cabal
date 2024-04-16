@@ -144,6 +144,8 @@ benchmark latency
     , local-cluster
     , mtl
     , optparse-applicative
+    , path
+    , path-io
     , resourcet
     , servant-client
     , temporary-extra

@@ -89,6 +89,8 @@ library framework
     , microstache
     , monad-loops
     , mtl
+    , path
+    , path-io
     , network-uri
     , resourcet
     , retry
@@ -158,6 +160,8 @@ library scenarios
     , lens-aeson
     , local-cluster
     , memory
+    , path
+    , path-io
     , pretty-simple
     , resourcet
     , servant-client

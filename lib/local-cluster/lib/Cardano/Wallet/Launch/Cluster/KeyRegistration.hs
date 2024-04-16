@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -29,7 +30,7 @@ import Cardano.Wallet.Launch.Cluster.Faucet
     , takeFaucet
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
     )
 import Cardano.Wallet.Launch.Cluster.SinkAddress
     ( genSinkAddress
@@ -47,8 +48,10 @@ import Data.Tagged
     ( Tagged (..)
     , untag
     )
-import System.FilePath
-    ( (</>)
+import Path
+    ( fromAbsFile
+    , relfile
+    , (</>)
     )
 
 import qualified Data.Aeson as Aeson
@@ -58,23 +61,19 @@ import qualified Data.Aeson as Aeson
 -- automatically delegating 'pledge' amount to the given stake key.
 prepareStakeKeyRegistration
     :: ClusterM
-        ( FileOf "reg-tx"
-        , FileOf "faucet-prv"
-        , FileOf "stake-prv"
+        ( AbsFileOf "reg-tx"
+        , AbsFileOf "faucet-prv"
+        , AbsFileOf "stake-prv"
         )
 prepareStakeKeyRegistration = do
     Config{..} <- ask
-    let file = pathOf cfgClusterDir </> "tx.raw"
-    let stakePub =
-            FileOf @"stake-pub"
-                $ pathOf cfgClusterDir </> "pre-registered-stake.vkey"
-        stakePrv =
-            FileOf @"stake-prv"
-                $ pathOf cfgClusterDir </> "pre-registered-stake.skey"
+    let file = cfgClusterDir </> [relfile|tx.raw|]
+        stakePub = cfgClusterDir </> [relfile|pre-registered-stake.vkey|]
+        stakePrv = cfgClusterDir </> [relfile|pre-registered-stake.skey|]
     liftIO $ do
         let (pub, prv) = preRegisteredStakeKeyPair
-        Aeson.encodeFile (pathOf stakePub) pub
-        Aeson.encodeFile (pathOf stakePrv) prv
+        Aeson.encodeFile (fromAbsFile stakePub) pub
+        Aeson.encodeFile (fromAbsFile stakePrv) prv
     (faucetInput, faucetPrv) <- takeFaucet
     cert <-
         issueStakeVkCert
@@ -94,8 +93,8 @@ prepareStakeKeyRegistration = do
         , "--fee"
         , show (faucetAmt - depositAmt - 1_000_000)
         , "--certificate-file"
-        , pathOf cert
+        , fromAbsFile cert
         , "--out-file"
-        , file
+        , fromAbsFile file
         ]
-    pure (FileOf @"reg-tx" file, faucetPrv, stakePrv)
+    pure (file, faucetPrv, stakePrv)

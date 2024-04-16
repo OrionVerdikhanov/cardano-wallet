@@ -112,6 +112,7 @@ library
     , contra-tracer
     , crypto-primitives
     , directory
+    , exceptions
     , extra
     , faucet
     , filepath
@@ -189,6 +190,8 @@ test-suite local-cluster-test
     , base
     , local-cluster
     , hspec
+    , path
+    , path-io
     , temporary
     , QuickCheck
   other-modules:

@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Wallet.Launch.Cluster.Tx
     ( signAndSubmitTx
@@ -28,7 +27,7 @@ import Cardano.Wallet.Launch.Cluster.Config
     , TestnetMagic (testnetMagicToNatural)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
     )
 import Control.Monad.Reader
     ( MonadIO (..)
@@ -40,6 +39,11 @@ import Data.Tagged
     ( Tagged (..)
     , untag
     )
+import Path
+    ( fromAbsDir
+    , fromAbsFile
+    , parseAbsFile
+    )
 import System.IO.Temp
     ( emptyTempFile
     )
@@ -48,34 +52,34 @@ import qualified Data.Text as T
 
 -- | Sign a transaction with all the necessary signatures.
 signTx
-    :: FileOf "tx-body"
+    :: AbsFileOf "tx-body"
     -- ^ Tx body file
-    -> [FileOf "signing-key"]
+    -> [AbsFileOf "signing-key"]
     -- ^ Signing keys for witnesses
-    -> ClusterM (FileOf "tx-signed")
+    -> ClusterM (AbsFileOf "tx-signed")
 signTx rawTx keys = do
     Config{..} <- ask
     let outputDir = cfgClusterDir
-    file <- liftIO $ emptyTempFile (pathOf outputDir) "tx-signed.json"
+    file <- liftIO $ emptyTempFile (fromAbsDir outputDir) "tx-signed.json"
     cli
         $ [ clusterEraToString cfgLastHardFork
           , "transaction"
           , "sign"
           , "--tx-body-file"
-          , pathOf rawTx
+          , fromAbsFile rawTx
           , "--testnet-magic"
           , show (testnetMagicToNatural cfgTestnetMagic)
           , "--out-file"
           , file
           ]
-            ++ concatMap (\key -> ["--signing-key-file", pathOf key]) keys
-    pure $ FileOf @"tx-signed" file
+            ++ concatMap (\key -> ["--signing-key-file", fromAbsFile key]) keys
+    parseAbsFile file
 
 -- | Submit a transaction through a running node.
 submitTx
     :: CardanoNodeConn
     -> Tagged "name" String
-    -> FileOf "tx-signed"
+    -> AbsFileOf "tx-signed"
     -> ClusterM ()
 submitTx conn name signedTx = do
     Config{..} <- ask
@@ -86,7 +90,7 @@ submitTx conn name signedTx = do
             , "transaction"
             , "submit"
             , "--tx-file"
-            , pathOf signedTx
+            , fromAbsFile signedTx
             , "--testnet-magic"
             , show (testnetMagicToNatural cfgTestnetMagic)
             , "--cardano-mode"
@@ -94,9 +98,9 @@ submitTx conn name signedTx = do
 
 signAndSubmitTx
     :: CardanoNodeConn
-    -> FileOf "tx-body"
+    -> AbsFileOf "tx-body"
     -- ^ Tx body file
-    -> [FileOf "signing-key"]
+    -> [AbsFileOf "signing-key"]
     -- ^ Signing keys for witnesses
     -> Tagged "name" String
     -> ClusterM ()

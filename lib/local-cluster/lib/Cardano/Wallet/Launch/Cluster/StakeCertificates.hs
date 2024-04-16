@@ -22,7 +22,7 @@ import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
     )
 import Control.Monad.Reader
     ( asks
@@ -33,49 +33,53 @@ import Data.Tagged
     ( Tagged (..)
     , untag
     )
-import System.FilePath
-    ( (</>)
+import Path
+    ( fromAbsFile
+    , parseRelFile
+    , (</>)
     )
 
 -- | Create a stake address registration certificate from a vk
 issueStakeVkCert
     :: Tagged "prefix" String
-    -> FileOf "stake-pub"
-    -> ClusterM (FileOf "stake-vk-cert")
+    -> AbsFileOf "stake-pub"
+    -> ClusterM (AbsFileOf "stake-vk-cert")
 issueStakeVkCert prefix stakePub = do
     outputDir <- asks cfgClusterDir
     lastHardFork <- asks cfgLastHardFork
-    let file = pathOf outputDir </> untag prefix <> "-stake.cert"
+    stakeCertFile <- parseRelFile $ untag prefix <> "-stake.cert"
+    let file = outputDir </> stakeCertFile
     cli $
         [ clusterEraToString lastHardFork
         , "stake-address"
         , "registration-certificate"
         , "--staking-verification-key-file"
-        , pathOf stakePub
+        , fromAbsFile stakePub
         , "--out-file"
-        , file
+        , fromAbsFile file
         ] <> case lastHardFork of
             BabbageHardFork -> []
             ConwayHardFork -> [
                 "--key-reg-deposit-amt"
                 , "1000000"
                 ]
-    pure $ FileOf file
+    pure file
 
 -- | Create a stake address registration certificate from a script
 issueStakeScriptCert
     :: Tagged "prefix" String
     -> FilePath
-    -> ClusterM (FileOf "stake-script-cert")
+    -> ClusterM (AbsFileOf "stake-script-cert")
 issueStakeScriptCert prefix stakeScript = do
     outputDir <- asks cfgClusterDir
-    let file = pathOf outputDir </> untag prefix <> "-stake.cert"
+    stakeCertFile <- parseRelFile $ untag prefix <> "-stake.cert"
+    let file = outputDir </> stakeCertFile
     cli
         [ "stake-address"
         , "registration-certificate"
         , "--stake-script-file"
         , stakeScript
         , "--out-file"
-        , file
+        , fromAbsFile file
         ]
-    pure $ FileOf file
+    pure file

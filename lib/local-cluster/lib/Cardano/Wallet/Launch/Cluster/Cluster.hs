@@ -41,8 +41,7 @@ import Cardano.Wallet.Launch.Cluster.Faucet
     , sendFaucetAssetsTo
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
-    , changeFileOf
+    ( changeFileOf
     )
 import Cardano.Wallet.Launch.Cluster.GenesisFiles
     ( GenesisFiles (..)
@@ -120,6 +119,9 @@ import Data.List
 import Data.List.NonEmpty
     ( NonEmpty ((:|))
     )
+import Path
+    ( fromAbsDir
+    )
 import System.Directory
     ( createDirectoryIfMissing
     , getCurrentDirectory
@@ -190,7 +192,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
             pwd <- liftIO  getCurrentDirectory
             liftIO $ traceWith cfgTracer
                 $ MsgInfo $ "Current dir " <> T.pack pwd
-            let clusterDir = pathOf cfgClusterDir
+            let clusterDir = fromAbsDir cfgClusterDir
             lift $ traceClusterLog $ MsgHardFork cfgLastHardFork
             phase Metadata
             metadataServer <- ContT withPoolMetadataServer
@@ -214,6 +216,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                     $ generateGenesis
                         (pureAdaFunds <> faucetAddresses <> massiveWalletFunds)
                         (addGenesisPools : cfgShelleyGenesisMods)
+            lift $ traceClusterLog $ MsgInfo $ T.pack (show genesisFiles)
             phase Genesis
             extraPort : poolsTcpPorts <-
                 liftIO
@@ -228,7 +231,8 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                         cfgLastHardFork
                         pool0port
                         cfgNodeLogging
-                        nodeOutputFile
+                        cfgNodeOutputFile
+            lift $ traceClusterLog $ MsgInfo $ T.pack (show pool0Cfg)
             phase Pool0
             runningPool0 <- ContT $ operatePool pool0 pool0Cfg
             phase Funding
@@ -249,7 +253,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                                         , extraLogDir = Nothing
                                         , minSeverityFile = Info
                                         }
-                                , nodeParamsOutputFile = nodeOutputFile
+                                , nodeParamsOutputFile = cfgNodeOutputFile
                                 }
                     phase Pools
                     _ <-
@@ -263,7 +267,6 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
     phase = liftIO . traceWith phaseChange
     FaucetFunds pureAdaFunds maryAllegraFunds massiveWalletFunds =
         faucetFunds
-    nodeOutputFile = pathOf <$> cfgNodeOutputFile
     -- Important cluster setup to run without rollbacks
     extraClusterSetupUsingNode
         :: NonEmpty ConfiguredPool -> RunningNode -> ClusterM ()
@@ -340,7 +343,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                         cfgLastHardFork
                         (port, peers)
                         cfgNodeLogging
-                        nodeOutputFile
+                        cfgNodeOutputFile
             asyncs <- forM (zip (NE.toList configuredPools) ports)
                 $ \(configuredPool, (port, peers)) -> do
                     async $ handle onException $ do

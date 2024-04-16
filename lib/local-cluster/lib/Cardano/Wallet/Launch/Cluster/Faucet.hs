@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -37,7 +38,7 @@ import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsFileOf
     , changeFileOf
     )
 import Cardano.Wallet.Launch.Cluster.MonetaryPolicyScript
@@ -69,8 +70,10 @@ import Control.Concurrent
     )
 import Control.Monad
     ( forM_
+    , guard
     , void
     , when
+    , (>=>)
     )
 import Control.Monad.Reader
     ( MonadIO (..)
@@ -113,6 +116,15 @@ import Data.Traversable
 import GHC.Stack
     ( HasCallStack
     )
+import Path
+    ( addExtension
+    , fromAbsDir
+    , fromAbsFile
+    , parseRelFile
+    , reldir
+    , relfile
+    , (</>)
+    )
 import Servant.Client
     ( BaseUrl (..)
     , ClientEnv
@@ -121,10 +133,6 @@ import Servant.Client
     )
 import System.Directory
     ( listDirectory
-    )
-import System.FilePath
-    ( (<.>)
-    , (</>)
     )
 import System.IO.Unsafe
     ( unsafePerformIO
@@ -150,16 +158,18 @@ import qualified Network.Wai.Handler.Warp as Warp
 -- transaction.
 takeFaucet
     :: HasCallStack
-    => ClusterM (Tagged "tx-in" String, FileOf "faucet-prv")
+    => ClusterM (Tagged "tx-in" String, AbsFileOf "faucet-prv")
 takeFaucet = do
     Config{..} <- ask
     i <- liftIO $ modifyMVar faucetIndex (\i -> pure (i + 1, i))
+    indexFilePath <- parseRelFile $ "faucet" <> show i
     let basename =
-            pathOf cfgClusterConfigs
-                </> "faucet-addrs"
-                </> "faucet"
-                <> show i
-    base58Addr <- liftIO $ BS.readFile $ basename <> ".addr"
+            cfgClusterConfigs
+                </> [reldir|faucet-addrs|]
+                </> indexFilePath
+    base58Addr <- do
+        addr <- addExtension ".addr" basename
+        liftIO $ BS.readFile $ fromAbsFile addr
     let addr =
             fromMaybe (error $ "decodeBase58 failed for " ++ show base58Addr)
                 . decodeBase58 bitcoinAlphabet
@@ -168,28 +178,32 @@ takeFaucet = do
                 $ T.decodeUtf8 base58Addr
 
     let txin = B8.unpack (convertToBase Base16 (blake2b256 addr)) <> "#0"
-    let signingKey = basename <> ".shelley.key"
-    pure (Tagged @"tx-in" txin, FileOf @"faucet-prv" signingKey)
+    signingKey <- addExtension ".shelley" >=> addExtension ".key" $  basename
+    pure (Tagged @"tx-in" txin, signingKey)
 
 readFaucetAddresses
     :: HasCallStack
     => ClusterM [Address]
 readFaucetAddresses = do
     Config{..} <- ask
-    let faucetDataPath = pathOf cfgClusterConfigs </> "faucet-addrs"
-    allFileNames <- liftIO $ listDirectory faucetDataPath
-    let addrFileNames = filter (".addr" `isSuffixOf`) allFileNames
-    liftIO $ forM addrFileNames $ readAddress . (faucetDataPath </>)
+    let faucetDataPath = cfgClusterConfigs </> [reldir|faucet-addrs|]
+    files <- liftIO $ listDirectory $ fromAbsDir faucetDataPath
+    sequence $ do
+        file <- files
+        guard $ ".addr" `isSuffixOf` file
+        pure $ do
+            path <- parseRelFile file
+            liftIO $ readAddress $ faucetDataPath </> path
   where
-    readAddress :: HasCallStack => FilePath -> IO Address
+    readAddress :: HasCallStack => AbsFileOf "faucet-addr" -> IO Address
     readAddress addrFile = do
-        rawFileContents <- TIO.readFile addrFile
+        rawFileContents <- TIO.readFile $ fromAbsFile addrFile
         let base58EncodedAddress = T.strip rawFileContents
         case Address.fromBase58 base58EncodedAddress of
             Just address -> pure address
             Nothing ->
                 error
-                    $ "Failed to base58-decode address file: " <> addrFile
+                    $ "Failed to base58-decode address file: " <> show addrFile
 
 -- | List of faucets also referenced in the shelley 'genesis.yaml'
 faucetIndex :: MVar Int
@@ -288,7 +302,7 @@ sendFaucet conn what targets = do
     Config{..} <- ask
     let clusterDir = cfgClusterDir
     (faucetInput, faucetPrv) <- takeFaucet
-    let file = pathOf clusterDir </> "faucet-tx.raw"
+    let file = clusterDir </> [relfile|faucet-tx.raw|]
 
     let mkOutput addr (TokenBundle (Coin c) tokens) =
             [ "--tx-out"
@@ -331,21 +345,19 @@ sendFaucet conn what targets = do
             "--fee"
           , show (faucetAmt - total)
           , "--out-file"
-          , file
+          , fromAbsFile file
           ]
             ++ concatMap (uncurry mkOutput . fmap fst) targets
             ++ mkMint targetAssets
-            ++ (concatMap (\f -> ["--minting-script-file", pathOf f]) scripts)
+            ++ (concatMap (\f -> ["--minting-script-file", fromAbsFile f]) scripts)
 
     policyKeys <-
         forM (nub $ concatMap (snd . snd) targets)
-            $ \(skey, keyHash) -> do
-                f <- writePolicySigningKey keyHash skey
-                pure $ FileOf @"signing-key" $ pathOf f
+            $ \(skey, keyHash) -> writePolicySigningKey keyHash skey
 
     signAndSubmitTx
         conn
-        (FileOf @"tx-body" file)
+        file
         (changeFileOf faucetPrv : policyKeys)
         (Tagged @"name" $ what ++ " faucet tx")
 
@@ -354,18 +366,20 @@ writePolicySigningKey
     -- ^ Name of file, keyhash perhaps.
     -> String
     -- ^ The cbor-encoded key material, encoded in hex
-    -> ClusterM (FileOf "policy-signing-key")
+    -> ClusterM (AbsFileOf "policy-signing-key")
     -- ^ Returns the filename written
 writePolicySigningKey keyHash cborHex = do
     outputDir <- asks cfgClusterDir
-    let keyFile = pathOf outputDir </> keyHash <.> "skey"
-    liftIO $ Aeson.encodeFile keyFile
+    keyFile <- do
+        keyHashFile <- parseRelFile keyHash >>= addExtension ".skey"
+        pure $ outputDir </> keyHashFile
+    liftIO $ Aeson.encodeFile (fromAbsFile keyFile)
         $ object
             [ "type" .= Aeson.String "PaymentSigningKeyShelley_ed25519"
             , "description" .= Aeson.String "Payment Signing Key"
             , "cborHex" .= cborHex
             ]
-    pure $ FileOf keyFile
+    pure keyFile
 
 withFaucet :: (ClientEnv -> IO a) -> IO a
 withFaucet useBaseUrl = Warp.withApplication Faucet.initApp $ \port -> do

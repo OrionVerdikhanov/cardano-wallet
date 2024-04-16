@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Cardano.Wallet.Launch.Cluster.PoolMetadataServer
@@ -19,9 +20,6 @@ import Cardano.Wallet.Launch.Cluster.ClusterM
 import Cardano.Wallet.Launch.Cluster.Config
     ( Config (..)
     )
-import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
-    )
 import Cardano.Wallet.Launch.Cluster.Logging
     ( ClusterLog (MsgRegisteringPoolMetadata)
     )
@@ -35,11 +33,20 @@ import Data.ByteArray.Encoding
     ( Base (Base16)
     , convertToBase
     )
+import Path
+    ( File
+    , Path
+    , Rel
+    , addExtension
+    , fromAbsDir
+    , fromAbsFile
+    , fromRelFile
+    , parseRelFile
+    , reldir
+    , (</>)
+    )
 import System.Directory
     ( createDirectoryIfMissing
-    )
-import System.FilePath
-    ( (</>)
     )
 import Test.Utils.StaticServer
     ( withStaticServer
@@ -52,7 +59,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL8
 
 data PoolMetadataServer = PoolMetadataServer
     { registerMetadataForPoolIndex :: Int -> Aeson.Value -> IO ()
-    , urlFromPoolIndex :: Int -> String
+    , urlFromPoolIndex :: Int -> IO String
     }
 
 withPoolMetadataServer
@@ -60,24 +67,29 @@ withPoolMetadataServer
     -> ClusterM a
 withPoolMetadataServer action = do
     UnliftClusterM withConfig Config{..} <- askUnliftClusterM
-    let metadir = pathOf cfgClusterDir </> "pool-metadata"
+    let metadir = cfgClusterDir </> [reldir|pool-metadata|]
+        metadirFilePath = fromAbsDir metadir
     liftIO $ do
-        createDirectoryIfMissing False metadir
-        withStaticServer metadir $ \baseURL -> do
-            let _urlFromPoolIndex i = baseURL </> metadataFileName i
+        createDirectoryIfMissing False metadirFilePath
+        withStaticServer metadirFilePath $ \baseURL -> do
+            let mkURL mdf = baseURL <> "/" <> fromRelFile mdf
             withConfig
                 $ action
                     PoolMetadataServer
                         { registerMetadataForPoolIndex = \i metadata -> do
                             let metadataBytes = Aeson.encode metadata
-                            BL8.writeFile (metadir </> (metadataFileName i)) metadataBytes
+                            mdf <- metadataFileName i
+                            BL8.writeFile (fromAbsFile $ metadir </> mdf) metadataBytes
                             let hash = blake2b256 (BL.toStrict metadataBytes)
                             traceWith cfgTracer
                                 $ MsgRegisteringPoolMetadata
-                                    (_urlFromPoolIndex i)
+                                    (mkURL mdf)
                                     (B8.unpack $ convertToBase Base16 hash)
-                        , urlFromPoolIndex = _urlFromPoolIndex
+                        , urlFromPoolIndex = \i -> do
+                                    mdf <- metadataFileName i
+                                    pure $ mkURL mdf
                         }
   where
-    metadataFileName :: Int -> FilePath
-    metadataFileName i = show i <> ".json"
+    metadataFileName :: Int -> IO (Path Rel File)
+    metadataFileName i = do
+        parseRelFile (show i) >>= addExtension ".json"

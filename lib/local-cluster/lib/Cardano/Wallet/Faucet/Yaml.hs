@@ -18,6 +18,9 @@ import Cardano.Address
 import Cardano.Wallet.Launch.Cluster.Cluster
     ( FaucetFunds (..)
     )
+import Cardano.Wallet.Launch.Cluster.FileOf
+    ( AbsFileOf
+    )
 import Cardano.Wallet.Primitive.Types.AssetId
     ( AssetId (..)
     )
@@ -46,6 +49,9 @@ import Data.Aeson.Types
     )
 import Data.Bifunctor
     ( Bifunctor (..)
+    )
+import Path
+    ( fromAbsFile
     )
 import UnliftIO
     ( SomeException
@@ -95,14 +101,17 @@ faucetFundsToValue FaucetFunds{..} =
             , "quantity" .= q
             ]
 
-retrieveFunds :: FilePath -> IO FaucetFunds
+retrieveFunds :: AbsFileOf "faucet-funds" -> IO FaucetFunds
 retrieveFunds fp = catch
-    (getFaucetFunds <$> Y.decodeFileThrow fp)
+    (getFaucetFunds <$> Y.decodeFileThrow (fromAbsFile fp))
     $ \(e :: SomeException) ->
         fail $ "Failed to read faucet funds from file: " <> show e
 
-saveFunds :: FilePath -> FaucetFunds -> IO ()
-saveFunds fp = Y.encodeFile fp . FaucetFundsYaml
+saveFunds
+    :: AbsFileOf "faucet-funds"
+    -> FaucetFunds
+    -> IO ()
+saveFunds fp = Y.encodeFile (fromAbsFile fp) . FaucetFundsYaml
 
 faucetFundsFromValue :: Value -> Parser FaucetFunds
 faucetFundsFromValue = withObject "FaucetFunds" $ \o -> do

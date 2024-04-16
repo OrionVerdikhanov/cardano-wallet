@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-missing-local-signatures #-}
 
 module Cardano.Wallet.Launch.Cluster.Env where
@@ -11,7 +10,12 @@ import Cardano.Wallet.Launch.Cluster.ClusterEra
     ( ClusterEra (..)
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( AbsDirOf
+    , AbsFileOf
+    , absolutize
+    )
+import Control.Monad
+    ( forM
     )
 import Data.Char
     ( toLower
@@ -21,6 +25,10 @@ import Data.Functor
     )
 import Data.Maybe
     ( fromMaybe
+    )
+import Path
+    ( parseSomeDir
+    , parseSomeFile
     )
 import System.Environment.Extended
     ( lookupEnvNonEmpty
@@ -58,16 +66,22 @@ clusterEraFromEnv = do
         "conway" -> pure ConwayHardFork
         _ -> die $ var ++ ": unknown era"
 
-localClusterConfigsFromEnv :: IO (FileOf "cluster-configs")
-localClusterConfigsFromEnv =
-    lookupEnvNonEmpty "LOCAL_CLUSTER_CONFIGS"
-        <&> FileOf @"cluster-configs"
-            . fromMaybe
+localClusterConfigsFromEnv :: IO (AbsDirOf "cluster-configs")
+localClusterConfigsFromEnv = do
+    x <- lookupEnvNonEmpty "LOCAL_CLUSTER_CONFIGS"
+        <&>  fromMaybe
                 (".." </> "local-cluster" </> "test" </> "data" </> "cluster-configs")
+    case parseSomeDir x of
+        Nothing -> die "Invalid directory path"
+        Just p -> absolutize p
 
-nodeOutputFileFromEnv :: IO (Maybe (FileOf "node-output"))
-nodeOutputFileFromEnv = fmap FileOf
-    <$> lookupEnvNonEmpty "LOCAL_CLUSTER_NODE_OUTPUT_FILE"
+nodeOutputFileFromEnv :: IO (Maybe (AbsFileOf "node-output"))
+nodeOutputFileFromEnv = do
+    mx <- lookupEnvNonEmpty "LOCAL_CLUSTER_NODE_OUTPUT_FILE"
+    forM mx $ \x -> do
+        case parseSomeFile x of
+            Nothing -> die "Invalid file path"
+            Just p -> absolutize p
 
 testnetMagicFromEnv :: IO Int
 testnetMagicFromEnv = lookupEnvNonEmpty "LOCAL_CLUSTER_MAGIC" <&> \case

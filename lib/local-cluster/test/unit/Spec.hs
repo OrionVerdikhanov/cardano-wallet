@@ -9,6 +9,9 @@ import Cardano.Wallet.Faucet.Yaml
     ( retrieveFunds
     , saveFunds
     )
+import Path
+    ( parseAbsFile
+    )
 import System.IO.Temp
     ( withSystemTempFile
     )
@@ -27,6 +30,7 @@ spec = do
     describe "FaucetFunds serialization" $ do
         it "should roundtrip" $ forAll genFaucetFunds $ \funds ->
             withSystemTempFile "funds" $ \fp _h -> do
-                saveFunds fp funds
-                funds' <- retrieveFunds fp
+                fp' <- parseAbsFile fp
+                saveFunds fp' funds
+                funds' <- retrieveFunds fp'
                 funds' `shouldBe` funds

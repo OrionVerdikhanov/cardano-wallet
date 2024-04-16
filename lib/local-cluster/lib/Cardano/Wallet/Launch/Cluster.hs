@@ -34,7 +34,7 @@ module Cardano.Wallet.Launch.Cluster
     , testMinSeverityFromEnv
     , testLogDirFromEnv
     , genTopology
-    , FileOf (..)
+    , FileOf
     , changeFileOf
 
       -- * Faucets
@@ -77,7 +77,7 @@ import Cardano.Wallet.Launch.Cluster.Faucet
     , withFaucet
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
-    ( FileOf (..)
+    ( FileOf
     , changeFileOf
     )
 import Cardano.Wallet.Launch.Cluster.Logging

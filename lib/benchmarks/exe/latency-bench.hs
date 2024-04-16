@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -85,7 +86,6 @@ import Cardano.Wallet.Faucet
 import Cardano.Wallet.Launch.Cluster
     ( Config (..)
     , FaucetFunds (..)
-    , FileOf (..)
     , RunningNode (..)
     , defaultPoolConfigs
     , testnetMagicToNatural
@@ -95,8 +95,9 @@ import Cardano.Wallet.Launch.Cluster
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( clusterConfigsDirParser
     )
-import Cardano.Wallet.Launch.Cluster.Config
-    ( NodePathSegment (..)
+import Cardano.Wallet.Launch.Cluster.FileOf
+    ( AbsDirOf
+    , mkAbsolutize
     )
 import Cardano.Wallet.Network.Implementation.Ouroboros
     ( tunedForMainnetPipeliningStrategy
@@ -193,6 +194,12 @@ import Network.Wai.Middleware.Logging
 import Numeric.Natural
     ( Natural
     )
+import Path
+    ( fromAbsDir
+    , parseAbsDir
+    , reldir
+    , (</>)
+    )
 import Servant.Client
     ( ClientError
     , ClientM
@@ -202,9 +209,6 @@ import System.Directory
     )
 import System.Environment.Extended
     ( isEnvSet
-    )
-import System.FilePath
-    ( (</>)
     )
 import System.IO.Temp.Extra
     ( SkipCleanup (..)
@@ -642,8 +646,9 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
     withServer cfgTestnetMagic faucetFunds setupAction = do
         skipCleanup <- SkipCleanup <$> isEnvSet "NO_CLEANUP"
         withSystemTempDir stdoutTextTracer "latency" skipCleanup $ \dir -> do
-            let db = dir </> "wallets"
-            createDirectory db
+            dirPath <- parseAbsDir dir
+            let db = dirPath </> [reldir|wallets|]
+            createDirectory $ fromAbsDir db
             CommandLineOptions{clusterConfigsDir} <- parseCommandLineOptions
             clusterEra <- Cluster.clusterEraFromEnv
             cfgNodeLogging <-
@@ -654,7 +659,7 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
                         { cfgStakePools = pure (NE.head defaultPoolConfigs)
                         , cfgLastHardFork = clusterEra
                         , cfgNodeLogging
-                        , cfgClusterDir = FileOf @"cluster" dir
+                        , cfgClusterDir = dirPath
                         , cfgClusterConfigs = clusterConfigsDir
                         , cfgTestnetMagic
                         , cfgShelleyGenesisMods =
@@ -666,7 +671,7 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
                             ]
                         , cfgTracer = stdoutTextTracer
                         , cfgNodeOutputFile = Nothing
-                        , cfgRelayNodePath = NodePathSegment "relay"
+                        , cfgRelayNodePath = [reldir|relay|]
                         , cfgClusterLogFile = Nothing
                         }
             withCluster
@@ -685,7 +690,7 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
             (NTestnet . fromIntegral $ testnetMagicToNatural testnetMagic)
             [] -- pool certificates
             tracers
-            (Just db)
+            (Just $ fromAbsDir db)
             Nothing -- db decorator
             "127.0.0.1"
             (ListenOnPort 8_090)
@@ -710,12 +715,14 @@ era = maxBound
 -- Command line options --------------------------------------------------------
 
 newtype CommandLineOptions = CommandLineOptions
-    {clusterConfigsDir :: FileOf "cluster-configs"}
+    {clusterConfigsDir :: AbsDirOf "cluster-configs"}
     deriving stock (Show)
 
 parseCommandLineOptions :: IO CommandLineOptions
-parseCommandLineOptions =
+parseCommandLineOptions = do
+    absolutize <- mkAbsolutize
     O.execParser
         $ O.info
-            (fmap CommandLineOptions clusterConfigsDirParser <**> O.helper)
+            (fmap CommandLineOptions (clusterConfigsDirParser absolutize)
+                <**> O.helper)
             (O.progDesc "Cardano Wallet's Latency Benchmark")

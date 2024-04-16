@@ -144,6 +144,8 @@ test-suite unit
     , ouroboros-consensus
     , ouroboros-network
     , ouroboros-network-api
+    , path
+    , path-io
     , persistent
     , persistent-sqlite
     , pretty-simple

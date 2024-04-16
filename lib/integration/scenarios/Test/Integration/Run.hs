@@ -15,14 +15,20 @@ where
 import Prelude
 
 import Cardano.Wallet.Launch.Cluster
-    ( FileOf (..)
+    ( FileOf
     )
 import Cardano.Wallet.Launch.Cluster.ClusterEra
     ( ignoreInBabbage
     , ignoreInConway
     )
+import Cardano.Wallet.Launch.Cluster.FileOf
+    ( absolutize
+    )
 import Cardano.Wallet.Primitive.NetworkId
     ( NetworkDiscriminant (..)
+    )
+import Control.Monad
+    ( (>=>)
     )
 import Data.Maybe
     ( fromMaybe
@@ -32,6 +38,9 @@ import Data.Typeable
     )
 import GHC.TypeNats
     ( natVal
+    )
+import Path
+    ( parseSomeDir
     )
 import System.Environment
     ( lookupEnv
@@ -97,9 +106,10 @@ main = withTestsSetup $ \testDir (tr, tracers) -> do
         _noConway = ignoreInConway localClusterEra
         _noBabbage = ignoreInBabbage localClusterEra
         testnetMagic = Cluster.TestnetMagic (natVal (Proxy @netId))
-    testDataDir <-
-        FileOf . fromMaybe "."
+    testDataDir <- do
+        x <- fromMaybe "."
             <$> lookupEnv "CARDANO_WALLET_TEST_DATA"
+        (parseSomeDir >=> absolutize) x
     let testingCtx = TestingCtx{..}
     hspecMain $ do
         describe "No backend required"
