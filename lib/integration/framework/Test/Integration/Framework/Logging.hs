@@ -126,9 +126,9 @@ instance HasSeverityAnnotation TestsLog where
         MsgSettingUpFaucet -> Notice
         MsgBaseUrl{} -> Notice
         MsgCluster msg -> getSeverityAnnotation msg
-        MsgPoolGarbageCollectionEvent _ -> Info
+        MsgPoolGarbageCollectionEvent _ -> Debug
         MsgServerError e
-            | isAsyncException e -> Notice
+            | isAsyncException e -> Debug
             | otherwise -> Warning
         MsgInfo _ -> Info
 
