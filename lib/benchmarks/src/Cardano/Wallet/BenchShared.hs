@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -50,7 +52,9 @@ import Cardano.BM.Trace
 import Cardano.Launcher.Node
     ( CardanoNodeConfig (..)
     , CardanoNodeConn
+    , MaybeK (..)
     , NodePort (..)
+    , Presence (..)
     , cardanoNodeConn
     , withCardanoNode
     )
@@ -96,6 +100,9 @@ import GHC.Generics
     ( Generic
     )
 -- See ADP-1910
+import Cardano.Launcher
+    ( ProcessHasExited
+    )
 import "optparse-applicative" Options.Applicative
     ( HasValue
     , Mod
@@ -116,6 +123,10 @@ import "optparse-applicative" Options.Applicative
     , switch
     , value
     )
+import Path
+    ( fromAbsFile
+    , parseAbsFile
+    )
 import Say
     ( sayErr
     )
@@ -131,6 +142,9 @@ import System.Exit
     )
 import System.FilePath
     ( (</>)
+    )
+import System.IO.Extra
+    ( withTempFile
     )
 import Test.Utils.Startup
     ( withNoBuffering
@@ -148,9 +162,6 @@ import UnliftIO.Temporary
 
 import qualified Cardano.BM.Configuration.Model as CM
 import qualified Cardano.BM.Data.BackendKind as CM
-import Cardano.Launcher
-    ( ProcessHasExited
-    )
 
 {-------------------------------------------------------------------------------
                CLI option handling and cardano-node configuration
@@ -180,7 +191,7 @@ execBenchWithNode networkConfig action = withNoBuffering $ do
                     Nothing
                     Nothing
                     nodeConfig
-                    $ action tr (networkConfig args)
+                    $ \(JustK socket) -> action tr (networkConfig args) socket
             case res of
                 Left (exited :: ProcessHasExited) -> do
                     sayErr $ "FAIL: cardano-node exited with status "
@@ -188,7 +199,10 @@ execBenchWithNode networkConfig action = withNoBuffering $ do
                     pure $ ExitFailure 1
                 Right _ -> pure ExitSuccess
 
-withNetworkConfiguration :: RestoreBenchArgs -> (CardanoNodeConfig -> IO a) -> IO a
+withNetworkConfiguration
+    :: RestoreBenchArgs
+    -> (CardanoNodeConfig 'Present -> IO a)
+    -> IO a
 withNetworkConfiguration args action = do
     -- Temporary directory for storing socket and node database
     let withNodeDir cb = case argNodeDatabaseDir args of
@@ -199,21 +213,26 @@ withNetworkConfiguration args action = do
 
     let networkDir = argsNetworkDir args
     port <- fromIntegral <$> getRandomPort
-    withNodeDir $ \dir -> action CardanoNodeConfig
-        { nodeDir          = dir
-        , nodeConfigFile   = networkDir </> "config.json"
-        , nodeDatabaseDir  = fromMaybe "db" (argNodeDatabaseDir args)
-        , nodeDlgCertFile  = Nothing
-        , nodeSignKeyFile  = Nothing
-        , nodeTopologyFile = networkDir </> "topology.json"
-        , nodeOpCertFile   = Nothing
-        , nodeKesKeyFile   = Nothing
-        , nodeVrfKeyFile   = Nothing
-        , nodePort         = Just (NodePort port)
-        , nodeLoggingHostname = Nothing
-        , nodeExecutable   = Nothing
-        , nodeOutputFile   = Nothing
-        }
+    withNodeDir $ \dir ->
+        withTempFile $ \socket -> do
+            socketPath <- parseAbsFile socket
+            action
+                CardanoNodeConfig
+                    { nodeDir = dir
+                    , nodeConfigFile = networkDir </> "config.json"
+                    , nodeDatabaseDir = fromMaybe "db" (argNodeDatabaseDir args)
+                    , nodeDlgCertFile = Nothing
+                    , nodeSignKeyFile = Nothing
+                    , nodeTopologyFile = networkDir </> "topology.json"
+                    , nodeOpCertFile = Nothing
+                    , nodeKesKeyFile = Nothing
+                    , nodeVrfKeyFile = Nothing
+                    , nodePort = Just (NodePort port)
+                    , nodeLoggingHostname = Nothing
+                    , nodeExecutable = Nothing
+                    , nodeOutputFile = Nothing
+                    , nodeSocketPathFile = JustK $ fromAbsFile socketPath
+                    }
 
 argsNetworkDir :: RestoreBenchArgs -> FilePath
 argsNetworkDir args = argConfigsDir args </> argNetworkName args

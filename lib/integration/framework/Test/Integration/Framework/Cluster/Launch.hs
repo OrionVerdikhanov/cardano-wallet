@@ -48,7 +48,6 @@ import Cardano.Wallet.Launch.Cluster.Config
     )
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( AbsFileOf
-    , DirOf
     )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
     ( Query (..)
@@ -96,8 +95,7 @@ import Ouroboros.Network.NodeToClient
     ( NodeToClientVersionData (..)
     )
 import Path
-    ( Abs
-    , fromAbsDir
+    ( fromAbsDir
     , fromAbsFile
     , parent
     , parseAbsFile
@@ -112,7 +110,6 @@ import System.Environment
     )
 import System.IO.Extra
     ( IOMode (..)
-    , withFile
     , withTempFile
     )
 import System.Process.Extra
@@ -121,13 +118,23 @@ import System.Process.Extra
     , proc
     )
 import UnliftIO
-    ( SomeException
-    , handle
+    ( Handle
+    , SomeException
+    , finally
+    , hClose
+    , openFile
     , try
     )
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
+
+-- | The withFile from base intercept exceptions and rethrows them after messing
+-- up the exception informations. :(
+withFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
+withFile fp mode f = do
+    h <- openFile fp mode
+    f h `finally` hClose h
 
 withLocalClusterProcess
     :: HasCallStack
@@ -145,12 +152,10 @@ withLocalClusterProcess CommandLineOptions{..} cfgTracer era = do
         Nothing -> pure Inherit
         Just logFile -> do
             createDirIfMissing True (parent logFile)
-            o <- fmap UseHandle
+            fmap UseHandle
                 $ ContT
                 $ withFile (fromAbsFile logFile) WriteMode
-            -- workaround `withFile` way of "redecorating" IOException
-            -- as something ALWAYS related to the managed file
-            ContT $ \k -> handle (\(e :: SomeException) -> error $ show e) $ k o
+
     void
         $ ContT
         $ withBackendCreateProcess
@@ -167,6 +172,8 @@ withLocalClusterProcess CommandLineOptions{..} cfgTracer era = do
                , fromAbsDir clusterConfigsDir
                , "--faucet-funds"
                , fromAbsFile faucetFundsFile
+               , "--socket-path"
+                , fromAbsFile nodeToClientSocket
                ]
             <> case clusterDir of
                 Nothing -> []
@@ -193,10 +200,10 @@ withFaucetFunds faucetFunds = ContT $ \action ->
 
 withSocketPath
     :: HasCallStack
-    => DirOf s Abs
+    => AbsFileOf s
     -> ContT r m CardanoNodeConn
-withSocketPath cfgClusterDir = ContT $ \f ->
-    case cardanoNodeConn $ nodeSocketPath $ fromAbsDir cfgClusterDir of
+withSocketPath socketFilePath = ContT $ \f ->
+    case cardanoNodeConn $ nodeSocketPath $ fromAbsFile socketFilePath of
         Left err -> error $ "Failed to get socket path: " ++ err
         Right socketPath -> f socketPath
 
@@ -235,16 +242,16 @@ withLocalCluster
     action = do
         let
             clusterConfigsDir = cfgClusterConfigs
-            relayDir = cfgClusterDir </> cfgRelayNodePath
             shelleyGenesis = cfgClusterDir </> [relfile|shelley-genesis.json|]
             clusterDir = Just cfgClusterDir
             clusterLogs = cfgClusterLogFile
             clusterControl = Nothing
+            nodeToClientSocket = cfgNodeToClientSocket
         evalContT $ do
             (monitoring, RunQuery queryMonitor) <-
                 withHttpMonitoring $ MsgHttpMonitoring >$< cfgTracer
             faucetFundsFile <- withFaucetFunds faucetFunds
-            socketPath <- withSocketPath relayDir
+            socketPath <- withSocketPath nodeToClientSocket
             withLocalClusterProcess
                 CommandLineOptions{monitoring = Just monitoring, ..}
                 cfgTracer

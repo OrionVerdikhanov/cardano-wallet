@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
@@ -15,7 +16,10 @@ import Prelude
 
 import Cardano.Launcher.Node
     ( CardanoNodeConfig (..)
+    , MaybeK (..)
     , NodePort (..)
+    , Presence (..)
+    , fmapMaybeK
     )
 import Cardano.Wallet.Launch.Cluster.ClusterM
     ( ClusterM
@@ -72,7 +76,7 @@ import System.Directory
 -- Connectiong wallet to a non-block producing (relay) node allows to avoid
 -- such problems.
 withRelayNode
-    :: NodeParams
+    :: NodeParams Present
     -- ^ Parameters used to generate config files.
     -> RelDirOf "node"
     -- ^ Path segment for the node to add to the cluster directory.
@@ -82,7 +86,7 @@ withRelayNode
 withRelayNode params nodeSegment onClusterStart = do
     let name = toFilePath nodeSegment
     relayDir <- askNodeDir nodeSegment
-    let NodeParams genesisFiles hardForks (port, peers) logCfg _ = params
+    let NodeParams genesisFiles hardForks (port, peers) logCfg _ msocket = params
     bracketTracer' "withRelayNode" $ do
         liftIO $ createDirectoryIfMissing True $ fromAbsDir relayDir
         let logCfg' = setLoggingName name logCfg
@@ -109,9 +113,8 @@ withRelayNode params nodeSegment onClusterStart = do
                     , nodeLoggingHostname = Just name
                     , nodeExecutable = Nothing
                     , nodeOutputFile = fromAbsFile <$> nodeParamsOutputFile params
+                    , nodeSocketPathFile = fmapMaybeK fromAbsFile msocket
                     }
-
-        let onClusterStart' socket =
-                onClusterStart
-                    $ RunningNode socket genesisData vd
-        withCardanoNodeProcess RelayNode cfg onClusterStart'
+        withCardanoNodeProcess RelayNode cfg $ \(JustK socket) ->
+            onClusterStart
+                $ RunningNode socket genesisData vd

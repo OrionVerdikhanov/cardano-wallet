@@ -5,6 +5,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# LANGUAGE GADTs #-}
 
 module Cardano.Wallet.Launch.Cluster.Cluster
     ( withCluster
@@ -146,6 +148,9 @@ import UnliftIO.Exception
     , throwIO
     )
 
+import Cardano.Launcher.Node
+    ( MaybeK (..)
+    )
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 
@@ -232,38 +237,37 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                         pool0port
                         cfgNodeLogging
                         cfgNodeOutputFile
+                        NothingK
             lift $ traceClusterLog $ MsgInfo $ T.pack (show pool0Cfg)
             phase Pool0
-            runningPool0 <- ContT $ operatePool pool0 pool0Cfg
-            phase Funding
-            lift $ extraClusterSetupUsingNode configuredPools runningPool0
-            case NE.nonEmpty otherPools of
-                Nothing -> do
-                    phase $ Cluster Nothing
-                    liftIO $ onClusterStart runningPool0
-                Just others -> do
-                    let relayNodeParams =
-                            NodeParams
-                                { nodeGenesisFiles = genesisFiles
-                                , nodeHardForks = cfgLastHardFork
-                                , nodePeers = (extraPort, poolsTcpPorts)
-                                , nodeLogConfig =
-                                    LogFileConfig
-                                        { minSeverityTerminal = Info
-                                        , extraLogDir = Nothing
-                                        , minSeverityFile = Info
-                                        }
-                                , nodeParamsOutputFile = cfgNodeOutputFile
+            passing () $ operatePool pool0 pool0Cfg
+            phase Relay
+            let relayNodeParams =
+                    NodeParams
+                        { nodeGenesisFiles = genesisFiles
+                        , nodeHardForks = cfgLastHardFork
+                        , nodePeers = (extraPort, poolsTcpPorts)
+                        , nodeLogConfig =
+                            LogFileConfig
+                                { minSeverityTerminal = Info
+                                , extraLogDir = Nothing
+                                , minSeverityFile = Info
                                 }
+                        , nodeParamsOutputFile = cfgNodeOutputFile
+                        , nodeSocket = JustK cfgNodeToClientSocket
+                        }
+            relayNode <- ContT $ withRelayNode relayNodeParams cfgRelayNodePath
+            phase Funding
+            lift $ extraClusterSetupUsingNode configuredPools relayNode
+            case NE.nonEmpty otherPools of
+                Nothing -> pure ()
+                Just others -> do
                     phase Pools
-                    _ <-
-                        ContT
-                            $ launchPools others genesisFiles poolPorts runningPool0
-                    phase Relay
-                    c <- ContT $ withRelayNode relayNodeParams cfgRelayNodePath
-                    phase $ Cluster $ Just $ RelayNode $ runningNodeSocketPath c
-                    liftIO $ onClusterStart c
+                    passing () $ launchPools others genesisFiles poolPorts
+            phase $ Cluster $ Just $ RelayNode $ runningNodeSocketPath relayNode
+            liftIO $ onClusterStart relayNode
   where
+    passing a f = ContT $ \k -> f $ k a
     phase = liftIO . traceWith phaseChange
     FaucetFunds pureAdaFunds maryAllegraFunds massiveWalletFunds =
         faucetFunds
@@ -308,16 +312,14 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
         -> [(Int, [Int])]
         -- @(port, peers)@ pairs availible for the nodes. Can be used to e.g.
         -- add a BFT node as extra peer for all pools.
-        -> RunningNode
         -- \^ Backup node to run the action with in case passed no pools.
-        -> (RunningNode -> ClusterM a)
+        -> ClusterM a
         -- \^ Action to run once when the stake pools are setup.
         -> ClusterM a
     launchPools
         configuredPools
         genesisFiles
         ports
-        fallbackNode
         action = do
             waitGroup <- newChan
             doneGroup <- newChan
@@ -344,13 +346,14 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                         (port, peers)
                         cfgNodeLogging
                         cfgNodeOutputFile
+                        NothingK
             asyncs <- forM (zip (NE.toList configuredPools) ports)
                 $ \(configuredPool, (port, peers)) -> do
                     async $ handle onException $ do
                         let cfg = mkConfig (port, peers)
                         operatePool configuredPool cfg
-                            $ \runningPool -> do
-                                writeChan waitGroup $ Right runningPool
+                            $ do
+                                writeChan waitGroup $ Right ()
                                 readChan doneGroup
             mapM_ link asyncs
             let cancelAll = do
@@ -369,13 +372,7 @@ withCluster phaseChange config@Config{..} faucetFunds onClusterStart =
                             ("cluster didn't start correctly: " <> errors)
                             (ExitFailure 1)
                 else do
-                    -- Run the action using the connection to the first pool,
-                    -- or the fallback.
-                    let node = case group of
-                            [] -> fallbackNode
-                            Right firstPool : _ -> firstPool
-                            Left e : _ -> error $ show e
-                    action node `finally` liftIO cancelAll
+                    action `finally` liftIO cancelAll
 
     -- \| Get permutations of the size (n-1) for a list of n elements, alongside
     -- with the element left aside. `[a]` is really expected to be `Set a`.

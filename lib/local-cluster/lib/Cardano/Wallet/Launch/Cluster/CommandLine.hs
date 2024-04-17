@@ -80,6 +80,7 @@ data CommandLineOptions = CommandLineOptions
     , monitoring :: Maybe Monitoring
     , clusterControl :: Maybe ClusterControl
     , clusterLogs :: Maybe (AbsFileOf "cluster-logs")
+    , nodeToClientSocket :: AbsFileOf "node-to-client-socket"
     }
     deriving stock (Show)
 
@@ -92,11 +93,21 @@ parseCommandLineOptions = do
             clusterDir <- clusterDirParser absolutize
             clusterLogs <- clusterLogsParser absolutize
             monitoring <- monitoringParser
+            nodeToClientSocket <- nodeToClientSocketParser absolutize
             pure $ \clusterControl -> CommandLineOptions{..}
     execParser
         $ info
             (options <**> helper)
             (progDesc "Local Cluster for testing")
+
+nodeToClientSocketParser :: Absolutize -> Parser (AbsFileOf "node-to-client-socket")
+nodeToClientSocketParser cwd =
+    option
+        (fileParser cwd)
+        ( long "socket-path"
+            <> metavar "NODE_TO_CLIENT_SOCKET"
+            <> help "Path to the node-to-client socket"
+        )
 
 monitoringParser :: Parser (Maybe Monitoring)
 monitoringParser = optional $ Monitoring <$> httpPortParser

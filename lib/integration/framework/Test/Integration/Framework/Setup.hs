@@ -229,6 +229,9 @@ import qualified Cardano.Wallet.Api.Link as Link
 import qualified Cardano.Wallet.Faucet as Faucet
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
 import qualified Data.Text as T
+import Path.IO
+    ( withSystemTempFile
+    )
 
 -- | Do all the program setup required for integration tests, create a temporary
 -- directory, and pass this info to the main hspec action.
@@ -497,50 +500,52 @@ withContext testingCtx@TestingCtx{..} action = do
         traceWith tr $ MsgInfo "Getting faucet funds..."
         faucetFunds <- runFaucetM faucetClientEnv $ mkFaucetFunds testnetMagic
         era <- clusterEraFromEnv
-        let clusterConfig =
-                Cluster.Config
-                    { cfgStakePools = Cluster.defaultPoolConfigs
-                    , cfgLastHardFork = era
-                    , cfgNodeLogging = LogFileConfig Info Nothing Info
-                    , cfgClusterDir = testDir
-                    , cfgClusterConfigs = clusterConfigs
-                    , cfgTestnetMagic = testnetMagic
-                    , cfgShelleyGenesisMods = []
-                    , cfgTracer = contramap MsgCluster tr
-                    , cfgNodeOutputFile = nodeOutputFile
-                    , cfgRelayNodePath = [reldir|relay|]
-                    , cfgClusterLogFile =
-                        Just
-                            $ testDir </> [relfile|cluster.logs|]
-                    }
-        traceWith tr $ MsgInfo $ "Cluster output dir " <> T.pack (show testDir)
-        let dbEventRecorder =
-                recordPoolGarbageCollectionEvents
-                    testingCtx
-                    poolGarbageCollectionEvents
-            cluster =
-                withServer
-                    testingCtx
-                    clusterConfig
-                    faucetFunds
-                    dbEventRecorder
-                    $ setupContext
+        withSystemTempFile "socket" $ \socketPath _ -> do
+            let clusterConfig =
+                    Cluster.Config
+                        { cfgStakePools = Cluster.defaultPoolConfigs
+                        , cfgLastHardFork = era
+                        , cfgNodeLogging = LogFileConfig Info Nothing Info
+                        , cfgClusterDir = testDir
+                        , cfgClusterConfigs = clusterConfigs
+                        , cfgTestnetMagic = testnetMagic
+                        , cfgShelleyGenesisMods = []
+                        , cfgTracer = contramap MsgCluster tr
+                        , cfgNodeOutputFile = nodeOutputFile
+                        , cfgRelayNodePath = [reldir|relay|]
+                        , cfgClusterLogFile =
+                            Just
+                                $ testDir </> [relfile|cluster.logs|]
+                        , cfgNodeToClientSocket = socketPath
+                        }
+            traceWith tr $ MsgInfo $ "Cluster output dir " <> T.pack (show testDir)
+            let dbEventRecorder =
+                    recordPoolGarbageCollectionEvents
+                        testingCtx
+                        poolGarbageCollectionEvents
+                cluster =
+                    withServer
                         testingCtx
                         clusterConfig
-                        ctx
-                        faucetClientEnv
-                        poolGarbageCollectionEvents
-            test = do
-                traceWith tr $ MsgInfo "Waiting for cluster to start..."
-                c <- takeMVar ctx
-                bracketTracer' tr "spec" $ do
-                    traceWith tr $ MsgInfo "Setting up delegation.."
-                    setupDelegation faucetClientEnv c
-                    traceWith tr $ MsgInfo "Running tests..."
-                    action c
-                    traceWith tr $ MsgInfo "Tests done."
-        res <- race cluster test
-        whenLeft res (throwIO . ProcessHasExited "integration")
+                        faucetFunds
+                        dbEventRecorder
+                        $ setupContext
+                            testingCtx
+                            clusterConfig
+                            ctx
+                            faucetClientEnv
+                            poolGarbageCollectionEvents
+                test = do
+                    traceWith tr $ MsgInfo "Waiting for cluster to start..."
+                    c <- takeMVar ctx
+                    bracketTracer' tr "spec" $ do
+                        traceWith tr $ MsgInfo "Setting up delegation.."
+                        setupDelegation faucetClientEnv c
+                        traceWith tr $ MsgInfo "Running tests..."
+                        action c
+                        traceWith tr $ MsgInfo "Tests done."
+            res <- race cluster test
+            whenLeft res (throwIO . ProcessHasExited "integration")
   where
     -- \| Setup delegation for 'rewardWallet' / 'rewardWalletMnemonics'.
     --

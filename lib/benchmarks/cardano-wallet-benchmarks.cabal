@@ -52,6 +52,7 @@ library
     , criterion-measurement
     , deepseq
     , directory
+    , extra
     , faucet
     , filepath
     , fmt
@@ -64,6 +65,8 @@ library
     , local-cluster
     , mtl
     , optparse-applicative
+    , path
+    , path-io
     , resourcet
     , say
     , servant-client
@@ -128,6 +131,7 @@ benchmark latency
     , cardano-wallet-application-extras
     , cardano-wallet-benchmarks
     , cardano-wallet-integration:framework
+    , cardano-wallet-launcher
     , cardano-wallet-network-layer
     , cardano-wallet-primitive
     , directory

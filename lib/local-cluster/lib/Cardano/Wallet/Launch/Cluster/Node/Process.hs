@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Cardano.Wallet.Launch.Cluster.Node.Process where
@@ -7,6 +9,7 @@ import Prelude
 import Cardano.Launcher.Node
     ( CardanoNodeConfig
     , CardanoNodeConn
+    , MaybeK
     , withCardanoNode
     )
 import Cardano.Wallet.Launch.Cluster.ClusterM
@@ -34,8 +37,8 @@ import Data.Functor.Contravariant
 
 withCardanoNodeProcess
     :: NodeId
-    -> CardanoNodeConfig
-    -> (CardanoNodeConn -> ClusterM a)
+    -> CardanoNodeConfig d
+    -> (MaybeK CardanoNodeConn d -> ClusterM a)
     -> ClusterM a
 withCardanoNodeProcess name cfg f = do
     Config{..} <- ask

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -32,7 +33,10 @@ import Cardano.CLI.Types.Key
     )
 import Cardano.Launcher.Node
     ( CardanoNodeConfig (..)
+    , MaybeK (NothingK)
     , NodePort (..)
+    , Presence (..)
+    , fmapMaybeK
     )
 import Cardano.Ledger.Api
     ( StandardCrypto
@@ -178,8 +182,8 @@ import qualified Data.Text as T
 data ConfiguredPool = ConfiguredPool
     { operatePool
         :: forall a
-         . NodeParams
-        -> (RunningNode -> ClusterM a)
+         . NodeParams Absent
+        -> ClusterM a
         -> ClusterM a
     -- ^ Precondition: the pool must first be registered.
     , metadataUrl
@@ -515,7 +519,7 @@ configurePool metadataServer recipe = do
                         ]
                         "retirement cert"
             traverse_ retire mRetirementEpoch
-
+        operatePool :: NodeParams Absent -> ClusterM a -> ClusterM a
         operatePool nodeParams action = do
             let NodeParams
                     genesisFiles
@@ -523,6 +527,7 @@ configurePool metadataServer recipe = do
                     (port, peers)
                     logCfg
                     nodeOutput
+                    mSocket
                     = nodeParams
             let logCfg' = setLoggingName name logCfg
 
@@ -531,7 +536,7 @@ configurePool metadataServer recipe = do
                 traceWith cfgTracer
                     $ MsgStartedStaticServer (fromAbsDir poolDir) url
 
-                (nodeConfig, genesisData, vd) <-
+                (nodeConfig, _genesisData, _vd) <-
                     withConfig
                         $ genNodeConfig
                             nodeSegment
@@ -556,10 +561,10 @@ configurePool metadataServer recipe = do
                             , nodeLoggingHostname = Just name
                             , nodeExecutable = Nothing
                             , nodeOutputFile = fromAbsFile <$> nodeOutput
+                            , nodeSocketPathFile = fmapMaybeK fromAbsFile mSocket
                             }
                 traceWith cfgTracer $ MsgInfo $ "Cardano node config: "
                     <> T.pack (show cfg)
-                withConfig
-                    $ withCardanoNodeProcess nodeId cfg
-                    $ \socket -> action $ RunningNode socket genesisData vd
+                withConfig $ withCardanoNodeProcess nodeId cfg
+                    $ \NothingK -> action
     pure ConfiguredPool{..}

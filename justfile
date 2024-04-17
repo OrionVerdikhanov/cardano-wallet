@@ -29,7 +29,7 @@ bench target:
 
 # run a local test cluster
 local-cluster:
-  nix shell '.#local-cluster' '.#cardano-node' '.#cardano-wallet' \
+  nix shell '.#local-cluster' '.#cardano-node' \
     -c "local-cluster" \
     control \
     --cluster-configs lib/local-cluster/test/data/cluster-configs \
@@ -37,7 +37,8 @@ local-cluster:
     --control-port 12798 \
     --pulling-mode not-pulling \
     --monitoring-port 12799 \
-    --cluster-logs ignore-me/cluster.logs
+    --cluster-logs ignore-me/cluster.logs \
+    --socket-path ignore-me/cluster.socket
 
 # run unit tests on a match
 unit-tests-cabal-match match:

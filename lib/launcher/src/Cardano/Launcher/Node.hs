@@ -1,3 +1,6 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 -- |
 -- Copyright: © 2018-2020 IOHK
@@ -9,6 +12,10 @@ module Cardano.Launcher.Node
     ( -- * Startup
       withCardanoNode
     , CardanoNodeConfig (..)
+    , MaybeK (..)
+    , maybeOfMaybeK
+    , fmapMaybeK
+    , Presence (..)
     , NodePort (..)
 
     -- * cardano-node Snockets
@@ -67,7 +74,6 @@ import System.Environment
 import System.FilePath
     ( isValid
     , takeFileName
-    , (</>)
     )
 import System.Info
     ( os
@@ -126,21 +132,23 @@ newtype NodePort = NodePort { unNodePort :: Int }
 
 -- | A subset of the @cardano-node@ CLI parameters, used for starting the
 -- backend.
-data CardanoNodeConfig = CardanoNodeConfig
-    { nodeDir             :: FilePath
-    , nodeConfigFile      :: FilePath
-    , nodeTopologyFile    :: FilePath
-    , nodeDatabaseDir     :: FilePath
-    , nodeDlgCertFile     :: Maybe FilePath
-    , nodeSignKeyFile     :: Maybe FilePath
-    , nodeOpCertFile      :: Maybe FilePath
-    , nodeKesKeyFile      :: Maybe FilePath
-    , nodeVrfKeyFile      :: Maybe FilePath
-    , nodePort            :: Maybe NodePort
+data CardanoNodeConfig d = CardanoNodeConfig
+    { nodeDir :: FilePath
+    , nodeConfigFile :: FilePath
+    , nodeTopologyFile :: FilePath
+    , nodeDatabaseDir :: FilePath
+    , nodeDlgCertFile :: Maybe FilePath
+    , nodeSignKeyFile :: Maybe FilePath
+    , nodeOpCertFile :: Maybe FilePath
+    , nodeKesKeyFile :: Maybe FilePath
+    , nodeVrfKeyFile :: Maybe FilePath
+    , nodePort :: Maybe NodePort
     , nodeLoggingHostname :: Maybe String
-    , nodeExecutable      :: Maybe FilePath
-    , nodeOutputFile      :: Maybe FilePath
-    } deriving (Show, Eq)
+    , nodeExecutable :: Maybe FilePath
+    , nodeOutputFile :: Maybe FilePath
+    , nodeSocketPathFile :: MaybeK FilePath d
+    }
+    deriving (Show, Eq)
 
 traceProcessHandles :: Tracer IO Text -> Maybe Handle -> IO ()
 traceProcessHandles _ Nothing = pure ()
@@ -154,6 +162,23 @@ defaultErrTracer :: Maybe (Tracer IO Text) -> Tracer IO Text
 defaultErrTracer Nothing = T.unpack >$< debugTracer
 defaultErrTracer (Just tr) = tr
 
+data Presence = Present | Absent
+
+data MaybeK x a where
+    NothingK :: MaybeK x Absent
+    JustK :: x -> MaybeK x Present
+
+deriving instance Show x => Show (MaybeK x a)
+deriving instance Eq x => Eq (MaybeK x a)
+
+fmapMaybeK :: (x -> y) -> MaybeK x a -> MaybeK y a
+fmapMaybeK _ NothingK = NothingK
+fmapMaybeK f (JustK x) = JustK (f x)
+
+maybeOfMaybeK :: MaybeK x a -> Maybe x
+maybeOfMaybeK NothingK = Nothing
+maybeOfMaybeK (JustK x) = Just x
+
 -- | Spawns a @cardano-node@ process.
 --
 -- IMPORTANT: @cardano-node@ must be available on the current path.
@@ -164,18 +189,19 @@ withCardanoNode
     -- ^ Trace for cardano-node stdout
     -> Maybe (Tracer IO Text)
     -- ^ Trace for cardano-node stderr
-    -> CardanoNodeConfig
-    -> (CardanoNodeConn -> IO a)
+    -> CardanoNodeConfig d
+    -- ^ Configuration for the node
+    -> (MaybeK CardanoNodeConn d -> IO a)
     -- ^ Callback function with a socket filename and genesis params
     -> IO a
 withCardanoNode tr nodeOutTr nodeErrTr cfg action = do
-    let socketPath = nodeSocketPath (nodeDir cfg)
-    cp <- cardanoNodeProcess cfg socketPath
+    let socketPath = fmapMaybeK nodeSocketPath $ nodeSocketPathFile cfg
+    cp <- cardanoNodeProcess cfg $ maybeOfMaybeK socketPath
     withBackendCreateProcess tr cp
         $ \(ProcessHandles _ mout merr _) -> do
             traceProcessHandles (defaultOutTracer nodeOutTr) mout
             traceProcessHandles (defaultErrTracer nodeErrTr) merr
-            action $ CardanoNodeConn socketPath
+            action $ fmapMaybeK CardanoNodeConn socketPath
 
 {-------------------------------------------------------------------------------
                                     Helpers
@@ -183,8 +209,8 @@ withCardanoNode tr nodeOutTr nodeErrTr cfg action = do
 
 -- Generate command-line arguments for launching @cardano-node@.
 cardanoNodeProcess
-    :: CardanoNodeConfig
-    -> FilePath
+    :: CardanoNodeConfig d
+    -> Maybe FilePath
     -> IO CreateProcess
 cardanoNodeProcess cfg socketPath = do
     myEnv <- getEnvironment
@@ -205,10 +231,9 @@ cardanoNodeProcess cfg socketPath = do
         , nodeTopologyFile cfg
         , "--database-path"
         , nodeDatabaseDir cfg
-        , "--socket-path"
-        , socketPath
         ]
-            ++ opt "--port" (show . unNodePort <$> nodePort cfg)
+            <> maybe [] (\p -> ["--socket-path", p]) socketPath
+            <> opt "--port" (show . unNodePort <$> nodePort cfg)
             ++ opt "--byron-signing-key" (nodeSignKeyFile cfg)
             ++ opt "--byron-delegation-certificate" (nodeDlgCertFile cfg)
             ++ opt "--shelley-operational-certificate" (nodeOpCertFile cfg)
@@ -220,9 +245,16 @@ cardanoNodeProcess cfg socketPath = do
     opt arg (Just val) = [arg, val]
 
 -- | Generate a 'FilePath' for the @cardano-node@ domain socket/named pipe.
+-- On Windows, the path is the filename at the end of the path
+-- prefixed with @"\\\\.\\pipe\\"@.
 nodeSocketPath
-    :: FilePath -- ^ @cardano-node@ state directory
-    -> FilePath -- ^ UNIX socket file path or Windows named pipe name
-nodeSocketPath dir
-    | os == "mingw32" = "\\\\.\\pipe\\" ++ takeFileName dir
-    | otherwise = dir </> "node.socket"
+    :: FilePath
+    -- ^ unix path
+    -> FilePath
+    -- ^ UNIX socket file path or Windows named pipe name
+nodeSocketPath name
+    | os == "mingw32" = mkWindowsPipeName $ takeFileName name
+    | otherwise = name
+
+mkWindowsPipeName :: FilePath -> FilePath
+mkWindowsPipeName name = "\\\\.\\pipe\\" ++ name

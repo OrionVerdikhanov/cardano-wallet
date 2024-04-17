@@ -200,6 +200,9 @@ import Path
     , reldir
     , (</>)
     )
+import Path.IO
+    ( withSystemTempFile
+    )
 import Servant.Client
     ( ClientError
     , ClientM
@@ -654,31 +657,33 @@ withShelleyServer tracers action = withFaucet $ \faucetClientEnv -> do
             cfgNodeLogging <-
                 Cluster.logFileConfigFromEnv
                     (Just (Cluster.clusterEraToString clusterEra))
-            let clusterConfig =
-                    Cluster.Config
-                        { cfgStakePools = pure (NE.head defaultPoolConfigs)
-                        , cfgLastHardFork = clusterEra
-                        , cfgNodeLogging
-                        , cfgClusterDir = dirPath
-                        , cfgClusterConfigs = clusterConfigsDir
-                        , cfgTestnetMagic
-                        , cfgShelleyGenesisMods =
-                            [ over #sgSlotLength (const 0.2)
-                            , -- to avoid "PastHorizonException" errors, as wallet
-                              -- doesn't keep up with retrieving fresh time interpreter.
-                              over #sgSecurityParam (const 100)
-                              -- when it low then cluster is not making blocks;
-                            ]
-                        , cfgTracer = stdoutTextTracer
-                        , cfgNodeOutputFile = Nothing
-                        , cfgRelayNodePath = [reldir|relay|]
-                        , cfgClusterLogFile = Nothing
-                        }
-            withCluster
-                nullTracer
-                clusterConfig
-                faucetFunds
-                (onClusterStart cfgTestnetMagic setupAction db)
+            withSystemTempFile "socket" $ \socketPath _ -> do
+                let clusterConfig =
+                        Cluster.Config
+                            { cfgStakePools = pure (NE.head defaultPoolConfigs)
+                            , cfgLastHardFork = clusterEra
+                            , cfgNodeLogging
+                            , cfgClusterDir = dirPath
+                            , cfgClusterConfigs = clusterConfigsDir
+                            , cfgTestnetMagic
+                            , cfgShelleyGenesisMods =
+                                [ over #sgSlotLength (const 0.2)
+                                , -- to avoid "PastHorizonException" errors, as wallet
+                                -- doesn't keep up with retrieving fresh time interpreter.
+                                over #sgSecurityParam (const 100)
+                                -- when it low then cluster is not making blocks;
+                                ]
+                            , cfgTracer = stdoutTextTracer
+                            , cfgNodeOutputFile = Nothing
+                            , cfgRelayNodePath = [reldir|relay|]
+                            , cfgClusterLogFile = Nothing
+                            , cfgNodeToClientSocket = socketPath
+                            }
+                withCluster
+                    nullTracer
+                    clusterConfig
+                    faucetFunds
+                    (onClusterStart cfgTestnetMagic setupAction db)
 
     onClusterStart testnetMagic setupAction db node = do
         let (RunningNode conn genesisData vData) = node

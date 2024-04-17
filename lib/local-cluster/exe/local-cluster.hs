@@ -136,6 +136,7 @@ main = withUtf8 $ do
         , monitoring
         , clusterLogs
         , clusterControl
+        , nodeToClientSocket
         } <-
         parseCommandLineOptions
     funds <- retrieveFunds faucetFundsFile
@@ -160,6 +161,7 @@ main = withUtf8 $ do
                     , cfgNodeOutputFile = Nothing
                     , cfgRelayNodePath = [reldir|relay|]
                     , cfgClusterLogFile = clusterLogs
+                    , cfgNodeToClientSocket = nodeToClientSocket
                     }
 
         liftIO $ putStrLn $ "Starting cluster with config: "
