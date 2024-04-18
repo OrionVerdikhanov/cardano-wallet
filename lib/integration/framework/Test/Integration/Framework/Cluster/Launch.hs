@@ -233,7 +233,7 @@ withLocalCluster
     -- ^ Configuration for the cluster.
     -> FaucetFunds
     -- ^ Initial faucet funds.
-    -> (RunningNode -> IO a)
+    -> (RunQuery IO -> RunningNode -> IO a)
     -- ^ Action to run once when all pools have started.
     -> IO a
 withLocalCluster
@@ -248,7 +248,7 @@ withLocalCluster
             clusterControl = Nothing
             nodeToClientSocket = cfgNodeToClientSocket
         evalContT $ do
-            (monitoring, RunQuery queryMonitor) <-
+            (monitoring, runQuery@(RunQuery queryMonitor)) <-
                 withHttpMonitoring $ MsgHttpMonitoring >$< cfgTracer
             faucetFundsFile <- withFaucetFunds faucetFunds
             socketPath <- withSocketPath nodeToClientSocket
@@ -259,7 +259,7 @@ withLocalCluster
             liftIO $ withLocalClusterReady queryMonitor
             genesisData <- withGenesisData shelleyGenesis
             lift
-                $ action
+                $ action runQuery
                 $ RunningNode
                     { runningNodeSocketPath = socketPath
                     , runningNodeShelleyGenesis = genesisData

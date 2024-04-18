@@ -18,6 +18,7 @@ import Prelude
 
 import Cardano.Address
     ( NetworkTag (..)
+    , unAddress
     )
 import Cardano.Address.Style.Shelley
     ( shelleyTestnet
@@ -36,9 +37,6 @@ import Cardano.CLI
     )
 import Cardano.Launcher
     ( ProcessHasExited (..)
-    )
-import Cardano.Launcher.Node
-    ( CardanoNodeConn
     )
 import Cardano.Ledger.Shelley.Genesis
     ( sgNetworkMagic
@@ -65,8 +63,6 @@ import Cardano.Wallet.Launch.Cluster
     , LogFileConfig (..)
     , RunningNode (..)
     , clusterEraFromEnv
-    , runClusterM
-    , sendFaucetAssetsTo
     , withFaucet
     , withSMASH
     )
@@ -76,6 +72,10 @@ import Cardano.Wallet.Launch.Cluster.Env
 import Cardano.Wallet.Launch.Cluster.FileOf
     ( AbsDirOf
     , absolutize
+    )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
+    ( Query (SendFaucetAssetsQ)
+    , RunQuery (..)
     )
 import Cardano.Wallet.Network.Implementation.Ouroboros
     ( tunedForMainnetPipeliningStrategy
@@ -98,6 +98,9 @@ import Cardano.Wallet.Primitive.SyncProgress
     )
 import Cardano.Wallet.Primitive.Types
     ( NetworkParameters
+    )
+import Cardano.Wallet.Primitive.Types.Address
+    ( Address (Address)
     )
 import Cardano.Wallet.Primitive.Types.Coin
     ( Coin (..)
@@ -128,8 +131,14 @@ import Control.Tracer
     , contramap
     , traceWith
     )
+import Data.Bifunctor
+    ( first
+    )
 import Data.Either.Combinators
     ( whenLeft
+    )
+import Data.Functor
+    ( (<&>)
     )
 import Data.IORef
     ( IORef
@@ -163,6 +172,9 @@ import Path
     , reldir
     , relfile
     , (</>)
+    )
+import Path.IO
+    ( withSystemTempFile
     )
 import Servant.Client
     ( ClientEnv
@@ -229,9 +241,6 @@ import qualified Cardano.Wallet.Api.Link as Link
 import qualified Cardano.Wallet.Faucet as Faucet
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
 import qualified Data.Text as T
-import Path.IO
-    ( withSystemTempFile
-    )
 
 -- | Do all the program setup required for integration tests, create a temporary
 -- directory, and pass this info to the main hspec action.
@@ -346,7 +355,7 @@ withServer
     -> FaucetFunds
     -> Pool.DBDecorator IO
     -> ( T.Text
-         -> CardanoNodeConn
+         -> RunQuery IO
          -> NetworkParameters
          -> URI
          -> IO ()
@@ -364,14 +373,15 @@ withServer
             withSMASH tr' (fromAbsDir testDir) $ \smashUrl -> do
                 traceWith tr $ MsgInfo "Starting local cluster ..."
                 withLocalCluster clusterConfig faucetFunds
-                    $ onClusterStart
-                        ctx
-                        (onReady (T.pack smashUrl))
-                        dbDecorator
+                    $ \rq ->
+                        onClusterStart
+                            ctx
+                            (onReady (T.pack smashUrl) rq)
+                            dbDecorator
 
 onClusterStart
     :: TestingCtx
-    -> (CardanoNodeConn -> NetworkParameters -> URI -> IO ())
+    -> (NetworkParameters -> URI -> IO ())
     -> Pool.DBDecorator IO
     -> RunningNode
     -> IO ExitCode
@@ -411,7 +421,7 @@ onClusterStart
                         block0
                     $ \uri -> do
                         traceWith tr $ MsgInfo "Wallet ready"
-                        callback nodeConnection networkParameters uri
+                        callback networkParameters uri
 
 -- threadDelay $ 3 * 60 * 1_000_000 -- Wait 3 minutes for the node to start
 -- exitSuccess
@@ -433,26 +443,25 @@ httpManager = do
 
 setupContext
     :: TestingCtx
-    -> Cluster.Config
     -> MVar Context
     -> ClientEnv
     -- ^ Faucet client environment
     -> IORef [PoolGarbageCollectionEvent]
     -> T.Text
-    -> CardanoNodeConn
+    -> RunQuery IO
     -> NetworkParameters
     -> URI
     -> IO ()
 setupContext
     TestingCtx{..}
-    clusterConfig
     ctx
     faucetClientEnv
     poolGarbageCollectionEvents
     smashUrl
-    nodeConnection
+    (RunQuery query)
     networkParameters
-    baseUrl =
+    baseUrl
+     =
         bracketTracer' tr "setupContext" $ do
             faucet <- Faucet.initFaucet faucetClientEnv
             prometheusUrl <-
@@ -482,11 +491,10 @@ setupContext
                     , _smashUrl = smashUrl
                     , _mintSeaHorseAssets = \nPerAddr batchSize c addrs ->
                         withMVar mintSeaHorseAssetsLock $ \() ->
-                            runClusterM clusterConfig
-                                $ sendFaucetAssetsTo
-                                    nodeConnection
-                                    batchSize
-                                    (Faucet.seaHorseTestAssets nPerAddr c addrs)
+                            query
+                                $ SendFaucetAssetsQ batchSize
+                                $ (Faucet.seaHorseTestAssets nPerAddr c addrs)
+                                <&> first (Address . unAddress)
                     }
 
 withContext :: TestingCtx -> (Context -> IO ()) -> IO ()
@@ -531,7 +539,6 @@ withContext testingCtx@TestingCtx{..} action = do
                         dbEventRecorder
                         $ setupContext
                             testingCtx
-                            clusterConfig
                             ctx
                             faucetClientEnv
                             poolGarbageCollectionEvents
