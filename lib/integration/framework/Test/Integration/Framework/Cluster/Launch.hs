@@ -220,7 +220,7 @@ withGenesisData shelleyGenesis = ContT $ \f -> do
 withLocalClusterReady :: (Query Bool -> IO Bool) -> IO ()
 withLocalClusterReady queryMonitor = do
     void $ liftIO $ retrying policy (const $ pure . not) $ \_ -> do
-                queryMonitor Ready
+                queryMonitor ReadyQ
     where
         policy :: RetryPolicyM IO
         policy = capDelay (120 * oneSecond) $ exponentialBackoff oneSecond

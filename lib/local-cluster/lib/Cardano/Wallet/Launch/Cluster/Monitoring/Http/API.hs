@@ -4,21 +4,31 @@
 
 module Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
     ( API
-    , proxyAPI
+    , MonitorApi
     )
 where
 
+import Prelude
+
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.SendFaucetAssets
+    ( SendFaucetAssets
+    )
 import Data.Proxy
     ( Proxy (..)
     )
-import Prelude
+import Servant
+    ( PostNoContent
+    )
 import Servant.API
     ( Get
     , JSON
+    , ReqBody
+    , (:<|>)
     , (:>)
     )
 
-type API = "ready" :> Get '[JSON] Bool
+type API n =
+    "ready" :> Get '[JSON] Bool
+        :<|> "send" :> ReqBody '[JSON] (SendFaucetAssets n):> PostNoContent
 
-proxyAPI :: Proxy API
-proxyAPI = Proxy
+type MonitorApi n = Proxy (API n)

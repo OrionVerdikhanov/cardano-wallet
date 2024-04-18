@@ -63,6 +63,8 @@ library
     Cardano.Wallet.Launch.Cluster.MonetaryPolicyScript
     Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
     Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
+    Cardano.Wallet.Launch.Cluster.Monitoring.Http.Logging
+    Cardano.Wallet.Launch.Cluster.Monitoring.Http.SendFaucetAssets
     Cardano.Wallet.Launch.Cluster.Monitoring.Http.Server
     Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     Cardano.Wallet.Launch.Cluster.Monitoring.Phase
@@ -91,6 +93,7 @@ library
   build-depends:
     , aeson
     , aeson-qq
+    , address-derivation-discovery
     , base
     , base58-bytestring
     , bytestring

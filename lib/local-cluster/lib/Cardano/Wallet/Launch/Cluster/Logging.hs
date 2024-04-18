@@ -42,7 +42,7 @@ import Cardano.Wallet.Launch.Cluster.ClusterEra
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
     ( MsgClient (..)
     )
-import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Logging
     ( MsgHttpMonitoring (..)
     )
 import Control.Monad

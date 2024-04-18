@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 import Prelude
 
@@ -21,13 +22,20 @@ import Cardano.Wallet.Faucet.Yaml
     )
 import Cardano.Wallet.Launch.Cluster
     ( Config (..)
+    , runningNodeSocketPath
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
+    ( API
+    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     ( withMonitoring
+    )
+import Cardano.Wallet.Primitive.NetworkId
+    ( NetworkDiscriminant (..)
     )
 import Control.Concurrent
     ( threadDelay
@@ -35,14 +43,14 @@ import Control.Concurrent
 import Control.Lens
     ( over
     )
-import Control.Monad
-    ( void
-    )
 import Control.Monad.Cont
     ( ContT (..)
     )
 import Control.Monad.Trans
     ( MonadIO (..)
+    )
+import Data.Proxy
+    ( Proxy (..)
     )
 import Main.Utf8
     ( withUtf8
@@ -57,6 +65,11 @@ import System.Environment.Extended
 import System.IO.Temp.Extra
     ( SkipCleanup (..)
     , withSystemTempDir
+    )
+import UnliftIO
+    ( atomically
+    , newTVarIO
+    , writeTVar
     )
 
 import qualified Cardano.Wallet.Launch.Cluster as Cluster
@@ -114,6 +127,9 @@ import qualified Cardano.Wallet.Launch.Cluster as Cluster
 -- - NO_CLEANUP  (default: temp files are cleaned up)
 --     If set, the temporary directory used as a state directory for
 --     nodes and wallet data won't be cleaned up.
+testnetMonitorAPI :: Proxy (API ('Testnet 42))
+testnetMonitorAPI = Proxy
+
 main :: IO ()
 main = withUtf8 $ do
     -- Handle SIGTERM properly
@@ -141,13 +157,12 @@ main = withUtf8 $ do
         parseCommandLineOptions
     funds <- retrieveFunds faucetFundsFile
     flip runContT pure $ do
-        trace <- withMonitoring clusterControl monitoring
         clusterPath <-
             case clusterDir of
                 Just path -> pure path
                 Nothing -> do
-                            d <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
-                            parseAbsDir d
+                    d <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
+                    parseAbsDir d
         let clusterCfg =
                 Cluster.Config
                     { cfgStakePools = Cluster.defaultPoolConfigs
@@ -163,9 +178,19 @@ main = withUtf8 $ do
                     , cfgClusterLogFile = clusterLogs
                     , cfgNodeToClientSocket = nodeToClientSocket
                     }
+        tconn <- liftIO $ newTVarIO Nothing
+        trace <-
+            withMonitoring
+                clusterControl
+                ((,) <$> monitoring <*> pure testnetMonitorAPI)
+                clusterCfg
+                tconn
 
-        liftIO $ putStrLn $ "Starting cluster with config: "
-            <> show o
-        void $ ContT $ Cluster.withCluster trace clusterCfg funds
+        liftIO
+            $ putStrLn
+            $ "Starting cluster with config: "
+                <> show o
+        conn <- ContT $ Cluster.withCluster trace clusterCfg funds
+        liftIO $ atomically $ writeTVar tconn (Just $ runningNodeSocketPath conn)
 
         liftIO $ threadDelay maxBound -- wait for Ctrl+C

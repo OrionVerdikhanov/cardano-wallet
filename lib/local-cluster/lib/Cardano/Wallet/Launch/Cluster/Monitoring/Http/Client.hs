@@ -1,9 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
     ( withHttpClient
@@ -18,8 +18,21 @@ import Prelude
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
     ( API
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.SendFaucetAssets
+    ( SendFaucetAssets (..)
+    )
+import Cardano.Wallet.Primitive.NetworkId
+    ( NetworkDiscriminant (..)
+    )
+import Cardano.Wallet.Primitive.Types.Address
+    ( Address
+    )
+import Cardano.Wallet.Primitive.Types.TokenBundle
+    ( TokenBundle
+    )
 import Control.Monad
     ( unless
+    , void
     )
 import Control.Monad.Cont
     ( ContT (..)
@@ -38,14 +51,16 @@ import Control.Tracer
     ( Tracer
     , traceWith
     )
-import Data.Proxy
-    ( Proxy (..)
-    )
 import Network.HTTP.Client
     ( ManagerSettings (..)
     , defaultManagerSettings
     , newManager
     , responseTimeoutNone
+    )
+import Servant
+    ( NoContent
+    , Proxy (..)
+    , (:<|>) (..)
     )
 import Servant.Client
     ( BaseUrl (..)
@@ -64,15 +79,28 @@ import UnliftIO
 
 -- | Queries that can be sent to the monitoring server via HTTP.
 data Query a where
-    Ready :: Query Bool
+    ReadyQ :: Query Bool
+    SendFaucetAssetsQ
+        :: Int
+        -> [(Address, (TokenBundle, [(String, String)]))]
+        -> Query ()
 
+testnetMonitorAPI :: Proxy (API ('Testnet 42))
+testnetMonitorAPI = Proxy
+
+sendFaucetAssets
+    :: SendFaucetAssets ('Testnet 42)
+    -> ClientM NoContent
 ready :: ClientM Bool
-ready = client (Proxy @API)
+
+ready :<|> sendFaucetAssets = client testnetMonitorAPI
 
 data AnyQuery = forall a. Show a => AnyQuery (Query a)
 
 instance Show AnyQuery where
-    show (AnyQuery Ready) = "Ready"
+    show (AnyQuery ReadyQ) = "Ready"
+    show (AnyQuery (SendFaucetAssetsQ n xs ))
+        = "SendFaucetAssets " <> show n <> " " <> show xs
 
 -- | Run any query against the monitoring server.
 newtype RunQuery m = RunQuery (forall a. Show a => Query a -> m a)
@@ -100,10 +128,15 @@ withHttpClient tracer httpPort = ContT $ \k -> do
             $ defaultManagerSettings
                 { managerResponseTimeout = responseTimeoutNone
                 }
+    let
+        query :: ClientM a -> IO a
+        query f = do
+            r <- runClientM f $ mkClientEnv manager url
+            either throwIO pure r
     k $ RunQuery $ \x -> do
         tr $ MsgClientReq $ AnyQuery x
         case x of
-            Ready -> liftIO
+            ReadyQ -> liftIO
                 $ recoverAll retryPolicy
                 $ \rt -> do
                     unless (firstTry rt)
@@ -111,8 +144,9 @@ withHttpClient tracer httpPort = ContT $ \k -> do
                         $ tr
                         $ MsgClientRetry
                         $ AnyQuery x
-                    r <- runClientM ready $ mkClientEnv manager url
-                    either throwIO pure r
+                    query ready
+            SendFaucetAssetsQ n xs -> liftIO $ do
+                void $ query $ sendFaucetAssets $ SendFaucetAssets n xs
 
 retryPolicy :: RetryPolicyM IO
 retryPolicy = capDelay (60 * oneSecond) $ exponentialBackoff oneSecond

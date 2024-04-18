@@ -10,24 +10,38 @@ where
 
 import Prelude
 
+import Cardano.Launcher.Node
+    ( CardanoNodeConn
+    )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( ClusterControl (..)
     , Monitoring (..)
     )
+import Cardano.Wallet.Launch.Cluster.Config
+    ( Config
+    )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
+    ( MonitorApi
+    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Client
-    ( MsgClient
-    , RunQuery
+    ( RunQuery
     , withHttpClient
     )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Logging
+    ( MsgHttpMonitoring (..)
+    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Server
-    ( withHttpServer
+    ( mkHandlers
+    , withHttpServer
     )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Phase
     ( Phase
     )
 import Cardano.Wallet.Network.Ports
-    ( PortNumber
-    , getRandomPort
+    ( getRandomPort
+    )
+import Cardano.Wallet.Primitive.NetworkId
+    ( HasSNetworkId
     )
 import Control.Monad.Cont
     ( ContT (..)
@@ -70,6 +84,9 @@ import Data.Time
     ( UTCTime
     , getCurrentTime
     )
+import UnliftIO
+    ( TVar
+    )
 
 import qualified Control.Foldl as F
 
@@ -95,37 +112,38 @@ timedMonitor initialState = do
 -- are enabled.
 -- This implies the offered phase tracer will be the same for both.
 withMonitoring
-    :: MonadUnliftIO m
+    :: HasSNetworkId n
     => Maybe ClusterControl
     -- ^ tcp cluster control options
-    -> Maybe Monitoring
+    -> Maybe (Monitoring, MonitorApi n)
     -- ^ http monitoring options
-    -> ContT r m (Tracer m Phase)
-withMonitoring mClusterControl mMonitoring = do
+    -> Config
+    -> TVar (Maybe CardanoNodeConn)
+    -> ContT r IO (Tracer IO Phase)
+withMonitoring mClusterControl mMonitoring config tconn = do
     let tcp ClusterControl{..} = do
             monitor <- lift $ timedMonitor pullingMode
             ContT $ withClusterControl clusterControlPort monitor
             pure monitor
-        http cMonitor Monitoring{..} = do
+        http cMonitor (Monitoring{..}, api) = do
             monitor <- maybe (lift $ timedMonitor NotPullingState) pure cMonitor
-            ContT $ withHttpServer monitoringPort $ rmap toList monitor
+            ContT
+                $ withHttpServer api monitoringPort
+                $ mkHandlers
+                    (rmap toList monitor)
+                    tconn
+                    config
             pure monitor
         maybeM m f = maybe (pure Nothing) (fmap Just <$> f) m
     cMonitor <- maybeM mClusterControl tcp
     mMonitor <- maybeM mMonitoring $ http cMonitor
     pure $ maybe nullTracer (Tracer . trace) mMonitor
 
-data MsgHttpMonitoring
-    = MsgHttpMonitoringPort PortNumber
-    | MsgHttpMonitoringQuery MsgClient
-    deriving stock (Show)
-
 -- | This will create a client for a monitoring system and a monitor command line
 -- option that will start a monitoring server on the same port the client is listening to.
 withHttpMonitoring
-    :: MonadUnliftIO m
-    => Tracer m MsgHttpMonitoring
-    -> ContT b m (Monitoring, RunQuery m)
+    :: Tracer IO MsgHttpMonitoring
+    -> ContT b IO (Monitoring, RunQuery IO)
 withHttpMonitoring tr =
     do
         httpPort <- liftIO getRandomPort
