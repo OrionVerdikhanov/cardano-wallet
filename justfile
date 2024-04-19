@@ -42,7 +42,7 @@ local-cluster:
 
 # run unit tests on a match
 unit-tests-cabal-match match:
-  LOCAL_CLUSTER_CONFIGS=../../lib/local-cluster/test/data/cluster-configs \
+  LOCAL_CLUSTER_CONFIGS=$(realpath ../../lib/local-cluster/test/data/cluster-configs) \
   cabal test cardano-wallet-unit:unit cardano-wallet-read:test -O0 -v0 \
     --test-options '--match="{{match}}"'
   cabal test cardano-wallet-launcher:unit -O0 -v0 \
@@ -84,8 +84,8 @@ integration-tests-cabal-match match:
 integration-tests-cabal-options options:
   TESTS_TRACING_MIN_SEVERITY=info \
   LOCAL_CLUSTER_NODE_OUTPUT_FILE=/dev/null \
-  LOCAL_CLUSTER_CONFIGS=../../lib/local-cluster/test/data/cluster-configs \
-  CARDANO_WALLET_TEST_DATA=../../lib/integration/test/data \
+  LOCAL_CLUSTER_CONFIGS=$(realpath ../../lib/local-cluster/test/data/cluster-configs) \
+  CARDANO_WALLET_TEST_DATA=$(realpath ../../lib/integration/test/data) \
   cabal test integration -O0 -v0 \
     --test-options '{{options}}'
 
