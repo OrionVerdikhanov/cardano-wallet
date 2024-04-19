@@ -5,13 +5,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
 import Prelude
 
-import Cardano.BM.Extra
-    ( stdoutTextTracer
+import Cardano.BM.Tracing
+    ( Severity (..)
+    , traceWith
     )
 import Cardano.Startup
     ( installSignalHandlers
@@ -22,17 +24,33 @@ import Cardano.Wallet.Faucet.Yaml
     )
 import Cardano.Wallet.Launch.Cluster
     ( Config (..)
+    , TestnetMagic (..)
+    , clusterEraFromEnv
+    , clusterEraToString
+    , defaultPoolConfigs
+    , logFileConfigFromEnv
     , runningNodeSocketPath
+    , withCluster
     )
 import Cardano.Wallet.Launch.Cluster.CommandLine
     ( CommandLineOptions (..)
     , parseCommandLineOptions
     )
+import Cardano.Wallet.Launch.Cluster.Logging
+    ( ClusterLog (..)
+    , filteredLogRenderer
+    , threadSafeTracer
+    )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Http.API
     ( API
     )
 import Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
-    ( withMonitoring
+    ( CardanoNodeConnVar (writeCardanoNodeConnVar)
+    , mkCardanoNodeConnVar
+    , withMonitoring
+    )
+import Cardano.Wallet.Launch.Cluster.Monitoring.Phase
+    ( Phase (..)
     )
 import Cardano.Wallet.Primitive.NetworkId
     ( NetworkDiscriminant (..)
@@ -43,11 +61,18 @@ import Control.Concurrent
 import Control.Lens
     ( over
     )
+import Control.Monad
+    ( (<=<)
+    )
 import Control.Monad.Cont
     ( ContT (..)
+    , evalContT
     )
 import Control.Monad.Trans
-    ( MonadIO (..)
+    ( lift
+    )
+import Data.Functor.Contravariant
+    ( (>$<)
     )
 import Data.Proxy
     ( Proxy (..)
@@ -67,12 +92,8 @@ import System.IO.Temp.Extra
     , withSystemTempDir
     )
 import UnliftIO
-    ( atomically
-    , newTVarIO
-    , writeTVar
+    ( stdout
     )
-
-import qualified Cardano.Wallet.Launch.Cluster as Cluster
 
 -- |
 -- # OVERVIEW
@@ -138,13 +159,12 @@ main = withUtf8 $ do
     -- Ensure key files have correct permissions for cardano-cli
     setDefaultFilePermissions
 
-    skipCleanup <- SkipCleanup <$> isEnvSet "NO_CLEANUP"
-    let tr = stdoutTextTracer
-    clusterEra <- Cluster.clusterEraFromEnv
+    logTracer <- threadSafeTracer stdout $ filteredLogRenderer Debug
+    clusterEra <- clusterEraFromEnv
     cfgNodeLogging <-
-        Cluster.logFileConfigFromEnv
+        logFileConfigFromEnv
             $ Just
-            $ Cluster.clusterEraToString clusterEra
+            $ clusterEraToString clusterEra
     o@CommandLineOptions
         { clusterConfigsDir
         , faucetFundsFile
@@ -155,42 +175,45 @@ main = withUtf8 $ do
         , nodeToClientSocket
         } <-
         parseCommandLineOptions
-    funds <- retrieveFunds faucetFundsFile
-    flip runContT pure $ do
+    traceWith logTracer $ MsgCommandLineOptions o
+    evalContT $ do
         clusterPath <-
             case clusterDir of
                 Just path -> pure path
                 Nothing -> do
-                    d <- ContT $ withSystemTempDir tr "test-cluster" skipCleanup
-                    parseAbsDir d
+                    skipCleanup <- lift $ SkipCleanup <$> isEnvSet "NO_CLEANUP"
+                    parseAbsDir <=< ContT
+                        $ withSystemTempDir
+                            (MsgTempDir >$< logTracer)
+                            "test-cluster"
+                            skipCleanup
         let clusterCfg =
-                Cluster.Config
-                    { cfgStakePools = Cluster.defaultPoolConfigs
+                Config
+                    { cfgStakePools = defaultPoolConfigs
                     , cfgLastHardFork = clusterEra
                     , cfgNodeLogging
                     , cfgClusterDir = clusterPath
                     , cfgClusterConfigs = clusterConfigsDir
-                    , cfgTestnetMagic = Cluster.TestnetMagic 42
+                    , cfgTestnetMagic = TestnetMagic 42
                     , cfgShelleyGenesisMods = [over #sgSlotLength \_ -> 0.2]
-                    , cfgTracer = stdoutTextTracer
+                    , cfgTracer = logTracer
                     , cfgNodeOutputFile = Nothing
                     , cfgRelayNodePath = [reldir|relay|]
                     , cfgClusterLogFile = clusterLogs
                     , cfgNodeToClientSocket = nodeToClientSocket
                     }
-        tconn <- liftIO $ newTVarIO Nothing
-        trace <-
+        nodeConnectionVar <- lift mkCardanoNodeConnVar
+        phaseTracer <-
             withMonitoring
                 clusterControl
                 ((,) <$> monitoring <*> pure testnetMonitorAPI)
                 clusterCfg
-                tconn
+                nodeConnectionVar
+        lift $ traceWith phaseTracer RetrievingFunds
+        funds <- lift $ retrieveFunds faucetFundsFile
+        conn <- ContT $ withCluster phaseTracer clusterCfg funds
+        lift
+            $ writeCardanoNodeConnVar nodeConnectionVar
+            $ runningNodeSocketPath conn
 
-        liftIO
-            $ putStrLn
-            $ "Starting cluster with config: "
-                <> show o
-        conn <- ContT $ Cluster.withCluster trace clusterCfg funds
-        liftIO $ atomically $ writeTVar tconn (Just $ runningNodeSocketPath conn)
-
-        liftIO $ threadDelay maxBound -- wait for Ctrl+C
+        lift $ threadDelay maxBound -- wait for Ctrl+C

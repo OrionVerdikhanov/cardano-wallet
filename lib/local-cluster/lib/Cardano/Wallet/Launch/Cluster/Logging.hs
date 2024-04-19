@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.Wallet.Launch.Cluster.Logging
     ( ClusterLog (..)
@@ -13,6 +14,8 @@ module Cardano.Wallet.Launch.Cluster.Logging
     , testLogDirFromEnv
     , minSeverityFromEnv
     , setLoggingName
+    , filteredLogRenderer
+    , threadSafeTracer
     )
 where
 
@@ -26,7 +29,7 @@ import Cardano.BM.Tracing
     ( HasPrivacyAnnotation
     , HasSeverityAnnotation (..)
     , Severity (..)
-    , Tracer
+    , Tracer (..)
     , contramap
     )
 import Cardano.Launcher
@@ -46,7 +49,9 @@ import Cardano.Wallet.Launch.Cluster.Monitoring.Http.Logging
     ( MsgHttpMonitoring (..)
     )
 import Control.Monad
-    ( liftM2
+    ( forever
+    , liftM2
+    , (<=<)
     )
 import Data.Char
     ( toLower
@@ -56,6 +61,10 @@ import Data.Text
     )
 import Data.Text.Class
     ( ToText (..)
+    )
+import Data.Time
+    ( UTCTime
+    , getCurrentTime
     )
 import System.Directory
     ( makeAbsolute
@@ -76,11 +85,24 @@ import System.FilePath.Posix
 import System.IO.Temp.Extra
     ( TempDirLog
     )
+import UnliftIO
+    ( Handle
+    , async
+    , atomically
+    , link
+    , newTChanIO
+    , readTChan
+    , writeTChan
+    )
 
+import Cardano.Wallet.Launch.Cluster.CommandLine
+    ( CommandLineOptions
+    )
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
+import qualified Data.Text.IO as T
 
 data NodeId = PoolNode Int | RelayNode
     deriving stock (Show)
@@ -107,6 +129,7 @@ data ClusterLog
     | MsgNodeStdout NodeId Text
     | MsgNodeStderr NodeId Text
     | MsgHttpMonitoring MsgHttpMonitoring
+    | MsgCommandLineOptions CommandLineOptions
     deriving stock (Show)
 
 instance ToText ClusterLog where
@@ -189,6 +212,8 @@ instance ToText ClusterLog where
             "Querying monitoring server: " <> case msg of
                 MsgClientReq q -> "Requesting " <> T.pack (show q)
                 MsgClientRetry q -> "Retrying " <> T.pack (show q)
+        MsgCommandLineOptions o ->
+            "Command line options: " <> T.pack (show o)
       where
         indent =
             T.unlines
@@ -200,8 +225,8 @@ instance ToText ClusterLog where
 instance HasPrivacyAnnotation ClusterLog
 instance HasSeverityAnnotation ClusterLog where
     getSeverityAnnotation = \case
-        MsgStartingCluster _ -> Notice
-        MsgRegisteringStakePools _ -> Notice
+        MsgStartingCluster _ -> Info
+        MsgRegisteringStakePools _ -> Info
         MsgLauncher _ _ -> Info
         MsgStartedStaticServer _ _ -> Info
         MsgTempDir msg -> getSeverityAnnotation msg
@@ -210,13 +235,9 @@ instance HasSeverityAnnotation ClusterLog where
         MsgCLIStatus _ (ExitFailure _) _ _ -> Error
         MsgCLIRetry _ -> Info
         MsgCLIRetryResult{} -> Info
-        -- NOTE: ^ Some failures are expected, so for cleaner logs we use Info,
-        -- instead of Warning.
         MsgSocketIsReady _ -> Info
         MsgStakeDistribution _ ExitSuccess _ _ -> Info
         MsgStakeDistribution _ (ExitFailure _) _ _ -> Info
-        -- NOTE: ^ Some failures are expected, so for cleaner logs we use Info,
-        -- instead of Warning.
         MsgInfo _ -> Info
         MsgGenOperatorKeyPair _ -> Debug
         MsgCLI _ -> Debug
@@ -226,6 +247,7 @@ instance HasSeverityAnnotation ClusterLog where
         MsgNodeStdout _ _ -> Debug
         MsgNodeStderr _ _ -> Debug
         MsgHttpMonitoring _ -> Info
+        MsgCommandLineOptions _ -> Info
 
 bracketTracer' :: Tracer IO ClusterLog -> Text -> IO a -> IO a
 bracketTracer' tr name = bracketTracer (contramap (MsgBracket name) tr)
@@ -298,3 +320,27 @@ setLoggingName :: String -> LogFileConfig -> LogFileConfig
 setLoggingName name cfg = cfg{extraLogDir = filename <$> extraLogDir cfg}
   where
     filename = (</> (name <.> "log"))
+
+-- | Create a thread-safe tracer that writes log messages to a file handle.
+-- The log consumer thread is linked to the current thread, so that if the
+-- current thread dies, the log consumer thread will also die.
+threadSafeTracer
+    :: Handle
+    -> ((UTCTime, ClusterLog) -> Maybe Text)
+    -> IO (Tracer IO ClusterLog)
+threadSafeTracer h render = do
+    c <- newTChanIO
+    link <=< async $ forever $ do
+        msg <- atomically $ readTChan c
+        t <- getCurrentTime
+        maybe (pure ()) (T.hPutStrLn h) $ render (t, msg)
+    pure $ Tracer $ \msg -> atomically $ writeTChan c msg
+
+filteredLogRenderer
+    :: Severity
+    -> (UTCTime, ClusterLog)
+    -> Maybe Text
+filteredLogRenderer minSeverity (t, msg) =
+    if getSeverityAnnotation msg >= minSeverity
+        then Just $ "[" <> T.pack (show t) <> "] " <> toText msg
+        else Nothing

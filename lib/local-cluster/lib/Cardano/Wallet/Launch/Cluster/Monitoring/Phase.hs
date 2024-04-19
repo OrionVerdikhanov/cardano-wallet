@@ -41,7 +41,8 @@ instance FromJSON RelayNode where
             Left e -> fail e
 
 data Phase
-    = Metadata
+    = RetrievingFunds
+    | Metadata
     | Genesis
     | Pool0
     | Funding

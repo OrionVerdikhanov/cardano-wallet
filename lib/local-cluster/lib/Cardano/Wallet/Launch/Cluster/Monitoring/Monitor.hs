@@ -5,6 +5,8 @@ module Cardano.Wallet.Launch.Cluster.Monitoring.Monitor
     ( withMonitoring
     , withHttpMonitoring
     , MsgHttpMonitoring (..)
+    , mkCardanoNodeConnVar
+    , CardanoNodeConnVar (readCardanoNodeConnVar, writeCardanoNodeConnVar)
     )
 where
 
@@ -84,11 +86,14 @@ import Data.Time
     ( UTCTime
     , getCurrentTime
     )
-import UnliftIO
-    ( TVar
-    )
 
 import qualified Control.Foldl as F
+import UnliftIO
+    ( atomically
+    , newTVarIO
+    , readTVarIO
+    , writeTVar
+    )
 
 withClusterControl
     :: (MonadUnliftIO m, Show a)
@@ -107,6 +112,19 @@ timedMonitor initialState = do
     t <- mkFoldingMonitor (liftIO getCurrentTime) F.map initialState
     mkMonitor t
 
+data CardanoNodeConnVar = CardanoNodeConnVar
+    { readCardanoNodeConnVar :: IO (Maybe CardanoNodeConn)
+    , writeCardanoNodeConnVar :: CardanoNodeConn -> IO ()
+    }
+
+mkCardanoNodeConnVar :: IO CardanoNodeConnVar
+mkCardanoNodeConnVar = do
+    var <- newTVarIO Nothing
+    pure
+        $ CardanoNodeConnVar
+            (readTVarIO var)
+            (atomically . writeTVar var . Just)
+
 -- | Start monitoring services as required by the given command line options
 -- The `Monitor` will be shared between the TCP and HTTP servers in case both
 -- are enabled.
@@ -118,7 +136,9 @@ withMonitoring
     -> Maybe (Monitoring, MonitorApi n)
     -- ^ http monitoring options
     -> Config
-    -> TVar (Maybe CardanoNodeConn)
+    -- ^ Configuration for the cluster.
+    -> CardanoNodeConnVar
+    -- ^ Try to get the relay node socket path, it will be unavailable at some point
     -> ContT r IO (Tracer IO Phase)
 withMonitoring mClusterControl mMonitoring config tconn = do
     let tcp ClusterControl{..} = do
@@ -131,7 +151,7 @@ withMonitoring mClusterControl mMonitoring config tconn = do
                 $ withHttpServer api monitoringPort
                 $ mkHandlers
                     (rmap toList monitor)
-                    tconn
+                    (readCardanoNodeConnVar tconn)
                     config
             pure monitor
         maybeM m f = maybe (pure Nothing) (fmap Just <$> f) m
