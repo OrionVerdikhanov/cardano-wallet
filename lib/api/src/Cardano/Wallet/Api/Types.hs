@@ -80,6 +80,7 @@ module Cardano.Wallet.Api.Types
     , ApiCoinSelectionOutput (..)
     , ApiCoinSelectionWithdrawal (..)
     , ApiEncryptMetadata (..)
+    , ApiEncryptMetadataMethod (..)
     , ApiConstructTransaction (..)
     , ApiConstructTransactionData (..)
     , ApiCosignerIndex (..)
@@ -193,7 +194,6 @@ module Cardano.Wallet.Api.Types
     , ApiDecodeTransactionPostData (..)
     , fromApiDecodeTransactionPostData
     , toApiDecodeTransactionPostData
-    , EncryptMetadataMethod (..)
 
     -- * API Types (Byron)
     , ApiByronWallet (..)
@@ -1238,22 +1238,14 @@ data ApiMultiDelegationAction
     deriving (Eq, Generic, Show)
     deriving anyclass NFData
 
-data EncryptMetadataMethod =  AES256CBC
-    deriving (Eq, Generic, Show)
+data ApiEncryptMetadataMethod = Basic
+    deriving (Bounded, Enum, Eq, Generic, Show)
     deriving anyclass NFData
-
-instance ToJSON EncryptMetadataMethod where
-    toJSON AES256CBC = "basic"
-instance FromJSON EncryptMetadataMethod where
-    parseJSON = withText "base" $ \txt ->
-        if txt == "basic" then
-            pure AES256CBC
-        else
-            fail "'basic' is expected."
+    deriving (FromJSON, ToJSON) via DefaultSum ApiEncryptMetadataMethod
 
 data ApiEncryptMetadata = ApiEncryptMetadata
     { passphrase :: ApiT (Passphrase "lenient")
-    , enc :: Maybe EncryptMetadataMethod
+    , enc :: Maybe ApiEncryptMetadataMethod
     }
     deriving (Eq, Generic, Show)
     deriving (FromJSON, ToJSON) via DefaultRecord ApiEncryptMetadata

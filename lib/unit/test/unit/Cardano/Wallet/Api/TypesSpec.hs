@@ -158,6 +158,7 @@ import Cardano.Wallet.Api.Types
     , ApiDelegationAction (..)
     , ApiDeregisterPool (..)
     , ApiEncryptMetadata (..)
+    , ApiEncryptMetadataMethod (..)
     , ApiEra (..)
     , ApiEraInfo (..)
     , ApiExternalCertificate (..)
@@ -251,7 +252,6 @@ import Cardano.Wallet.Api.Types
     , ByronWalletFromXPrvPostData (..)
     , ByronWalletPostData (..)
     , ByronWalletPutPassphraseData (..)
-    , EncryptMetadataMethod (..)
     , Iso8601Time (..)
     , KeyFormat (..)
     , NtpSyncingStatus (..)
@@ -804,6 +804,7 @@ spec = do
         jsonTest @ApiCredential
         jsonTest @ApiCredentialType
         jsonTest @ApiDelegationAction
+        jsonTest @ApiEncryptMetadata
         jsonTest @ApiEra
         jsonTest @ApiEraInfo
         jsonTest @ApiError
@@ -2399,7 +2400,11 @@ instance Arbitrary TxMetadataWithSchema where
     <*> arbitrary
 
 instance Arbitrary ApiEncryptMetadata where
-    arbitrary = ApiEncryptMetadata <$> arbitrary <*> pure (Just AES256CBC)
+    arbitrary = applyArbitrary2 ApiEncryptMetadata
+
+instance Arbitrary ApiEncryptMetadataMethod where
+    arbitrary = arbitraryBoundedEnum
+    shrink = shrinkBoundedEnum
 
 instance Arbitrary DRepID where
     arbitrary = do
