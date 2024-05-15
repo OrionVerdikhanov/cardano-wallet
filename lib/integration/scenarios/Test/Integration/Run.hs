@@ -119,7 +119,6 @@ main = withTestsSetup $ \testDir (tr, tracers) -> do
             describe "API Specifications" $ do
                 parallel $ do
                     Addresses.spec @n
-                    CoinSelections.spec @n
                     Blocks.spec
                     ByronAddresses.spec @n
                     ByronCoinSelections.spec @n
@@ -129,17 +128,20 @@ main = withTestsSetup $ \testDir (tr, tracers) -> do
                     SharedTransactions.spec @n
                     ByronWallets.spec @n
                     HWWallets.spec @n
-                    Migrations.spec @n
                     ByronMigrations.spec @n
-                    Transactions.spec @n
-                    TransactionsNew.spec @n
                     Network.spec
                     Network_.spec
-                    StakePools.spec @n
                     ByronTransactions.spec @n
                     ByronHWWallets.spec @n
                     Voting.spec @n
                     Restoration.spec
+                    -- reward wallet could be slow to accrue rewards, so we run
+                    -- tests that depend on rewards last to avoid flakiness
+                    CoinSelections.spec @n
+                    StakePools.spec @n
+                    Transactions.spec @n
+                    TransactionsNew.spec @n
+                    Migrations.spec @n
 
             -- Possible conflict with StakePools - mark as not parallizable
             sequential Settings.spec
