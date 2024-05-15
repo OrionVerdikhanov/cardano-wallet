@@ -1827,7 +1827,7 @@ rewardWallet ctx = do
              in request @ApiWallet ctx endpoint Default Empty
     let w = getResponse r
 
-    waitNumberOfEpochBoundaries 2 ctx
+    waitNumberOfEpochBoundaries 3 ctx
 
     eventually "MIR wallet has available balance" $
         fetchWallet w >>=
