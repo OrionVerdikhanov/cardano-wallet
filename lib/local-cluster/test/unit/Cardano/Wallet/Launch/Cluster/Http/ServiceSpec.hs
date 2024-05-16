@@ -1,5 +1,11 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Evaluate" #-}
@@ -11,15 +17,27 @@ where
 
 import Prelude
 
+import Cardano.Binary
+    ( serialize'
+    )
 import Cardano.BM.ToTextTracer
     ( ToTextTracer (..)
     , newToTextTracer
+    )
+import Cardano.Chain.Common
+    ( unsafeGetLovelace
     )
 import Cardano.Launcher
     ( Command (..)
     , IfToSendSigINT (..)
     , TimeoutInSecs (..)
     , withBackendProcess
+    )
+import Cardano.Ledger.Coin
+    ( Coin (..)
+    )
+import Cardano.Ledger.Mary.Value
+    ( MaryValue (..)
     )
 import Cardano.Wallet.Launch.Cluster
     ( FaucetFunds (FaucetFunds)
@@ -58,10 +76,18 @@ import Cardano.Wallet.Network.Ports
     ( PortNumber
     , getRandomPort
     )
+import Cardano.Wallet.Network.Streaming
+    ( CallbackLogs
+    , ChainStream
+    , eraBlockS
+    , eraTxS
+    , forChainStream
+    , forConsensusS
+    , scanChainStream
+    , withStreamingFromBlockChain
+    )
 import Cardano.Wallet.Primitive.Ledger.Shelley
-    ( CardanoBlock
-    , StandardCrypto
-    , fromGenesisData
+    ( fromGenesisData
     )
 import Cardano.Wallet.Primitive.NetworkId
     ( NetworkId (..)
@@ -71,8 +97,23 @@ import Cardano.Wallet.Primitive.NetworkId
 import Cardano.Wallet.Primitive.SyncProgress
     ( SyncTolerance (SyncTolerance)
     )
+import Cardano.Wallet.Read
+    ( Era (..)
+    , EraValue
+    , IsEra (..)
+    , K (..)
+    , Tx
+    , applyEraFunValue
+    , extractEraValue
+    , (:*:) (..)
+    )
+import Cardano.Wallet.Read.Tx.Outputs
+    ( Outputs (..)
+    , getEraOutputs
+    )
 import Control.Monad
     ( forM_
+    , join
     , unless
     )
 import Control.Monad.Cont
@@ -82,9 +123,6 @@ import Control.Monad.Cont
 import Control.Monad.Fix
     ( fix
     )
-import Control.Monad.IO.Class
-    ( liftIO
-    )
 import Control.Monitoring.Tracing
     ( MonitorState (..)
     )
@@ -92,6 +130,33 @@ import Control.Tracer
     ( Tracer
     , nullTracer
     , traceWith
+    )
+import Data.ByteString
+    ( ByteString
+    )
+import Data.Foldable
+    ( toList
+    )
+import Data.Map.Strict
+    ( Map
+    )
+import Ouroboros.Consensus.Cardano.Block
+    ( CardanoBlock
+    , StandardAllegra
+    , StandardAlonzo
+    , StandardBabbage
+    , StandardConway
+    , StandardCrypto
+    , StandardMary
+    , StandardShelley
+    )
+import Streaming
+    ( MonadIO (liftIO)
+    , Of
+    , Stream
+    )
+import Streaming.Callbacks
+    ( newTMVarBuffer
     )
 import System.Environment
     ( lookupEnv
@@ -118,6 +183,7 @@ import Test.Hspec
     , describe
     , it
     , shouldBe
+    , shouldNotBe
     )
 import UnliftIO.Async
     ( async
@@ -129,8 +195,19 @@ import UnliftIO.Concurrent
 import UnliftIO.Directory
     ( createDirectoryIfMissing
     )
+import Cardano.Wallet.Network.Rollback.One
+    ( oneHistory
+    )
 
+import qualified Cardano.Chain.UTxO as Byron
+import qualified Cardano.Ledger.Address as SL
+import qualified Cardano.Ledger.Alonzo.TxOut as Alonzo
+import qualified Cardano.Ledger.Babbage.TxOut as Babbage
+import qualified Cardano.Ledger.Shelley as SL
+import qualified Cardano.Ledger.Shelley.API as SL
 import qualified Cardano.Wallet.Network.Implementation as NL
+import qualified Data.Map.Strict as Map
+import qualified Streaming.Prelude as S
 
 testService
     :: MonitorState
@@ -337,9 +414,39 @@ spec = do
                     "withNetwork-can-start-and-stop"
                     noFunds
             node <- liftIO $ waitForNode query
-            nl <- withNetwork tr node
-            tip <- liftIO $ currentNodeTip nl
+            network <- withNetwork tr node
+            tip <- liftIO $ currentNodeTip network
             tip `seq` pure ()
+        it "can get the first block" $ evalContT $ do
+            ((query, _), ToTextTracer tr) <-
+                testServiceWithCluster
+                    "withNetwork-can-get-collect-the-incoming-blocks"
+                    noFunds
+            node <- liftIO $ waitForNode query
+            network <- withNetwork tr node
+            blocks <- withStreamingFromBlockChain network tr newTMVarBuffer
+            firstBlock <- liftIO
+                    $ S.effects -- discard logs
+                    $ S.head_ -- get the first element
+                    $ elements blocks
+            liftIO $ join firstBlock `shouldNotBe` Nothing
+        it "can get the first non-empty balance" $ evalContT $ do
+            ((query, _), ToTextTracer tr) <-
+                testServiceWithCluster
+                    "withNetwork-can-get-collect-the-incoming-blocks"
+                    noFunds
+            node <- liftIO $ waitForNode query
+            network <- withNetwork tr node
+            blocks <- withStreamingFromBlockChain network tr newTMVarBuffer
+            firstBalance <- liftIO
+                $ S.effects
+                $ S.head_
+                $ balance
+                $ outputs
+                $ eraTxS
+                $ eraBlockS
+                $ forConsensusS blocks
+            liftIO $ firstBalance `shouldNotBe` Nothing
 
 waitForNode :: RunMonitorQ IO -> IO RunningNode
 waitForNode (RunQuery query) = fix $ \loop -> do
@@ -354,3 +461,77 @@ getNode (History phases) = case phases of
     (_time, phase) : _ -> case phase of
         Cluster (Just node) -> Just node
         _ -> Nothing
+
+data TxOut = TxOut
+    { address :: ByteString
+    , value :: Integer
+    }
+    deriving stock (Show, Eq)
+
+outputs
+    :: ChainStream (EraValue (ctx :*: Tx)) ()
+    -> ChainStream TxOut ()
+outputs = forChainStream $ extractEraValue . applyEraFunValue f
+  where
+    f :: IsEra era => (ctx :*: Tx) era -> K [TxOut] era
+    f (_bh :*: tx) = txOutFromOutput $ getEraOutputs tx
+
+elements
+    :: ChainStream a r
+    -> Stream
+        (Of (Maybe a))
+        (Stream (Of (CallbackLogs a)) IO)
+        r
+elements = scanChainStream (const Just) $ oneHistory 10 Nothing
+
+balance
+    :: ChainStream TxOut r
+    -> Stream
+        (Of (Map ByteString Integer))
+        ( Stream (Of (CallbackLogs TxOut)) IO
+        )
+        r
+balance =
+    scanChainStream
+        (\m (TxOut addr val) -> Map.insertWith (+) addr val m)
+        $ oneHistory 10 Map.empty
+
+txOutFromOutput :: forall era. IsEra era => Outputs era -> K [TxOut] era
+txOutFromOutput = case theEra @era of
+    Byron -> \(Outputs os) -> K $ fromByronTxOut <$> toList os
+    Shelley -> \(Outputs os) -> K $ fromShelleyTxOut <$> toList os
+    Allegra -> \(Outputs os) -> K $ fromAllegraTxOut <$> toList os
+    Mary -> \(Outputs os) -> K $ fromMaryTxOut <$> toList os
+    Alonzo -> \(Outputs os) -> K $ fromAlonzoTxOut <$> toList os
+    Babbage -> \(Outputs os) -> K $ fromBabbageTxOut <$> toList os
+    Conway -> \(Outputs os) -> K $ fromConwayTxOut <$> toList os
+  where
+    fromByronTxOut :: Byron.TxOut -> TxOut
+    fromByronTxOut (Byron.TxOut addr amount) =
+        TxOut (serialize' addr) (fromIntegral $ unsafeGetLovelace amount)
+
+    fromShelleyTxOut :: SL.ShelleyTxOut StandardShelley -> TxOut
+    fromShelleyTxOut (SL.ShelleyTxOut addr (Coin amount)) =
+        TxOut (SL.serialiseAddr addr) amount
+
+    fromAllegraTxOut :: SL.ShelleyTxOut StandardAllegra -> TxOut
+    fromAllegraTxOut (SL.ShelleyTxOut addr (Coin amount)) =
+        TxOut (SL.serialiseAddr addr) amount
+
+    fromMaryTxOut :: SL.ShelleyTxOut StandardMary -> TxOut
+    fromMaryTxOut (SL.ShelleyTxOut addr (MaryValue (Coin amount) _)) =
+        TxOut (SL.serialiseAddr addr) amount
+
+    fromAlonzoTxOut :: Alonzo.AlonzoTxOut StandardAlonzo -> TxOut
+    fromAlonzoTxOut (Alonzo.AlonzoTxOut addr (MaryValue (Coin amount) _) _) =
+        TxOut (SL.serialiseAddr addr) amount
+
+    fromBabbageTxOut :: Babbage.BabbageTxOut StandardBabbage -> TxOut
+    fromBabbageTxOut
+        (Babbage.BabbageTxOut addr (MaryValue (Coin amount) _) _ _) =
+            TxOut (SL.serialiseAddr addr) amount
+
+    fromConwayTxOut :: Babbage.BabbageTxOut StandardConway -> TxOut
+    fromConwayTxOut
+        (Babbage.BabbageTxOut addr (MaryValue (Coin amount) _) _ _) =
+            TxOut (SL.serialiseAddr addr) amount
