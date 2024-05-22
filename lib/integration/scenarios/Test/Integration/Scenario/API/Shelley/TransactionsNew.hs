@@ -609,6 +609,25 @@ spec = describe "NEW_SHELLEY_TRANSACTIONS" $ do
                     ]
             checkMetadataEncryption ctx toBeEncrypted metadataRaw
 
+    it "TRANS_NEW_CREATE_02d - \
+        \Multiple metadata structures to be encrypted" $
+        \ctx -> runResourceT $ do
+            let toBeEncrypted =
+                    TxMetaList [TxMetaText "Extremely secret message #1."]
+            let toBeEncryptedExtra =
+                    TxMetaList [TxMetaText "Extremely secret message #2."]
+            let metadataRaw =
+                    TxMetadata $ Map.fromList
+                    [ (0, TxMetaText "hello")
+                    , (674, TxMetaMap
+                        [ (TxMetaText "msg", toBeEncrypted)
+                        , (TxMetaText "msg", toBeEncryptedExtra)
+                        ]
+                      )
+                    , (50, TxMetaNumber 1_245)
+                    ]
+            checkMetadataEncryption ctx toBeEncrypted metadataRaw
+
     it "TRANS_NEW_CREATE_03a - Withdrawal from self, 0 rewards" $ \ctx -> runResourceT $ do
         wa <- fixtureWallet ctx
         let initialBalance = wa ^. #balance . #available . #toNatural
