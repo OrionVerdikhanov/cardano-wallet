@@ -24,7 +24,7 @@ bench="./bench-read-blocks/bin/read-blocks"
 
 echo "--- Run benchmark"
 
-$bench +RTS -N2 -qg -A1m -I0 -T -M16G -RTS 2>&1 | tee $log
+$bench +RTS -N8 -qg -A1m -I0 -T -M16G -RTS 2>&1 | tee $log
 # Reminder on GHC RTS options:
 #   -N ⟨x⟩
 #         Use ⟨x⟩ simultaneous threads when running the program.
