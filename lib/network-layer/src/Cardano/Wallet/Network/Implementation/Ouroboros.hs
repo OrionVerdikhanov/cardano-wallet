@@ -109,6 +109,9 @@ import Data.Text
 import Data.Void
     ( Void
     )
+import GHC.Conc
+    ( par
+    )
 import Network.TypedProtocol.Pipelined
     ( N (..)
     , Nat (..)
@@ -584,7 +587,7 @@ chainSyncWithBlocks tr pipeliningStrategy chainFollower =
 
     handleRollforward :: NonEmpty block -> Tip block -> m ()
     handleRollforward blocks tip = do
-        rollForward chainFollower blocks tip
+        rollForward chainFollower (foldr par blocks blocks) tip
         traceWith tr $ MsgLocalTip (blockPoint $ NE.last blocks)
 
     handleRollback
