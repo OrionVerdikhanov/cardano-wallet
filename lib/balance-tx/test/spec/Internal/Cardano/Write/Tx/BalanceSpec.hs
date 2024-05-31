@@ -1217,7 +1217,7 @@ prop_balanceTxValid
                 . classify (length originalOuts > 100)
                     ">100 payment outputs"
         let coverage res =
-                checkCoverage . cover 8 (isRight res) "success"
+                checkCoverage . cover 6 (isRight res) "success"
         let res =
                 testBalanceTx
                     wallet
@@ -1319,7 +1319,7 @@ prop_balanceTxValid
                             ReferenceScriptsNotSupported _ ->
                                 label "ReferenceScriptsNotSupported"
                                     $ property True
-                            _ -> property False
+                            e -> counterexample (show e) $ property False
                         RecentEraConway -> case x of
                             BabbageContextError y -> case y of
                                 ByronTxOutInContext _ ->
@@ -1328,8 +1328,14 @@ prop_balanceTxValid
                                 ReferenceScriptsNotSupported _ ->
                                     label "ReferenceScriptsNotSupported"
                                         $ property True
-                                _ -> property False
-                            _ -> property False
+                                e -> counterexample (show e) $ property False
+                            ProposalProceduresFieldNotSupported _ ->
+                                label "ProposalProceduresFieldNotSupported"
+                                    $ property True
+                            VotingProceduresFieldNotSupported _ ->
+                                label "VotingProceduresFieldNotSupported"
+                                    $ property True
+                            e -> counterexample (show e) $ property False
             Left ErrBalanceTxUnableToCreateChange {} ->
                 label "unable to create change" $ property True
             Left ErrBalanceTxInputResolutionConflicts{} ->

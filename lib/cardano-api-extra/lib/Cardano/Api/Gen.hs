@@ -1792,10 +1792,10 @@ genProposals w = case w of
 genVotingProcedures :: ConwayEraOnwards era -> Gen (ShelleyApi.TxVotingProcedures BuildTx era)
 genVotingProcedures w = case w of
     ConwayEraOnwardsConway ->
-        oneof
-            [ TxVotingProcedures <$> arbitrary <*> pure (BuildTxWith mempty)
-            , pure TxVotingProceduresNone
-         ]
+       frequency
+            [ (9, TxVotingProcedures <$> arbitrary <*> pure (BuildTxWith mempty))
+            , (1, pure TxVotingProceduresNone)
+            ]
 
 genTxBodyContent :: CardanoEra era -> Gen (TxBodyContent BuildTx era)
 genTxBodyContent era = withEraWitness era $ \sbe -> do
