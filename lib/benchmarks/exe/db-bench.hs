@@ -16,6 +16,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 
 #if __GLASGOW_HASKELL__ >= 902
 {-# OPTIONS_GHC -Wno-ambiguous-fields #-}
