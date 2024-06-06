@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -15,13 +14,6 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-
-{-# OPTIONS_GHC -Wno-warnings-deprecations #-}
-{-# OPTIONS_GHC -Wno-unused-local-binds #-}
-{-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
--- For 'Shelley.evaluateTransactionFee', see ADP-3334
--- https://cardanofoundation.atlassian.net/browse/ADP-3334
 
 -- |
 -- Copyright: © 2022 IOHK
@@ -150,7 +142,6 @@ module Internal.Cardano.Write.Tx
     , AssetName
 
     -- * Balancing
-    , evaluateMinimumFee
     , evaluateTransactionBalance
     )
     where
@@ -178,7 +169,6 @@ import Cardano.Ledger.Alonzo.UTxO
     )
 import Cardano.Ledger.Api
     ( coinTxOutL
-    , estimateMinFeeTx
     , ppKeyDepositL
     )
 import Cardano.Ledger.Api.UTxO
@@ -226,9 +216,6 @@ import Cardano.Ledger.Val
     )
 import Control.Arrow
     ( (>>>)
-    )
-import Data.Bits
-    ( Bits
     )
 import Data.ByteString
     ( ByteString
@@ -560,7 +547,7 @@ type TxOutInBabbage = Babbage.BabbageTxOut (Babbage.BabbageEra StandardCrypto)
 
 type Address = Ledger.Addr StandardCrypto
 
-type RewardAccount = Ledger.RewardAcnt StandardCrypto
+type RewardAccount = Ledger.RewardAccount StandardCrypto
 type Script = AlonzoScript
 type ScriptHash = Core.ScriptHash StandardCrypto
 type Value = MaryValue StandardCrypto
@@ -846,59 +833,6 @@ stakeKeyDeposit pp = pp ^. Core.ppKeyDepositL
 --------------------------------------------------------------------------------
 -- Balancing
 --------------------------------------------------------------------------------
-
--- | Computes the minimal fee amount necessary to pay for a given transaction.
---
-evaluateMinimumFee
-    :: IsRecentEra era
-    => PParams era
-    -> Core.Tx era
-    -> KeyWitnessCounts
-    -> Coin
-evaluateMinimumFee pp tx kwc =
-    mainFee <> bootWitnessFee
-  where
-    KeyWitnessCounts {nKeyWits, nBootstrapWits} = kwc
-
-    -- FIXME(NODE 8.11.0): Consider safety of using this new ledger function
-    --
-    -- [ADP-3334] Stop using deprecated ledger function
-    -- https://cardanofoundation.atlassian.net/browse/ADP-3334
-    mainFee :: Coin
-    mainFee =
-        estimateMinFeeTx pp tx
-            (unsafeIntCast nKeyWits)
-            accountForBootWitsElsewhere
-            totalReferenceScriptSizeBytes
-
-    FeePerByte feePerByte = getFeePerByte pp
-
-    -- 'estimateMinFeeTx' appears to assume byron/bootstrap wits contain no
-    -- address attributes or payload. For now, let's keep using our own
-    -- estimation.
-    accountForBootWitsElsewhere = 0
-
-    totalReferenceScriptSizeBytes = 0 -- FIXME(NODE 8.11.0)
-
-    bootWitnessFee :: Coin
-    bootWitnessFee = Coin $ intCast $ feePerByte * byteCount
-      where
-        byteCount :: Natural
-        byteCount = sizeOf_BootstrapWitnesses $ intCast nBootstrapWits
-
-        -- Matching implementation in "Cardano.Wallet.Shelley.Transaction".
-        -- Equivalence is tested in property.
-        sizeOf_BootstrapWitnesses :: Natural -> Natural
-        sizeOf_BootstrapWitnesses 0 = 0
-        sizeOf_BootstrapWitnesses n = 4 + 180 * n
-
-    unsafeIntCast
-        :: (HasCallStack, Integral a, Integral b, Bits a, Bits b, Show a)
-        => a
-        -> b
-    unsafeIntCast x = fromMaybe err $ intCastMaybe x
-      where
-        err = error $ "unsafeIntCast failed for " <> show x
 
 -- | Evaluate the /balance/ of a transaction using the ledger.
 --
