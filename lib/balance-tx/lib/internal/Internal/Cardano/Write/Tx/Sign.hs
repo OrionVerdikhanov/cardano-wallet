@@ -1,10 +1,14 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 
 -- |
 -- Copyright: © 2023 IOHK, 2023 Cardano Foundation
@@ -18,6 +22,7 @@ module Internal.Cardano.Write.Tx.Sign
 
     -- * Signing-related utilities required for balancing
       estimateSignedTxSize
+    , estimateSignedTxMinFee
 
     , KeyWitnessCounts (..)
     , TimelockKeyWitnessCounts (..)
@@ -30,6 +35,9 @@ module Internal.Cardano.Write.Tx.Sign
 
 import Prelude
 
+import Cardano.Api.Ledger
+    ( Coin
+    )
 import Cardano.Ledger.Allegra.Scripts
     ( Timelock
     )
@@ -41,7 +49,7 @@ import Cardano.Ledger.Api
     , addrTxWitsL
     , bodyTxL
     , bootAddrTxWitsL
-    , ppMinFeeAL
+    , getMinFeeTx
     , scriptTxWitsL
     , sizeTxF
     , witsTxL
@@ -50,9 +58,15 @@ import Cardano.Ledger.Credential
     ( Credential (..)
     , StakeCredential
     )
+import Cardano.Ledger.Tools
+    ( addDummyWitsTx
+    )
 import Cardano.Ledger.UTxO
     ( EraUTxO (getScriptsHashesNeeded, getScriptsNeeded)
     , txinLookup
+    )
+import Cardano.Wallet.Primitive.Types.Tx.Constraints
+    ( TxSize (..)
     )
 import Control.Lens
     ( view
@@ -60,14 +74,23 @@ import Control.Lens
     , (.~)
     , (^.)
     )
+import Data.ByteArray.Encoding
+    ( Base (..)
+    , convertFromBase
+    )
+import Data.ByteString
+    ( ByteString
+    )
+import Data.IntCast
+    ( intCast
+    , intCastMaybe
+    )
 import Data.Map.Strict
     ( Map
     )
 import Data.Maybe
-    ( mapMaybe
-    )
-import Data.Monoid.Monus
-    ( Monus ((<\>))
+    ( fromMaybe
+    , mapMaybe
     )
 import Data.Set
     ( Set
@@ -80,23 +103,24 @@ import Internal.Cardano.Write.Tx
     , Tx
     , TxIn
     , UTxO
+    , feeOfBytes
+    , getFeePerByte
     , toCardanoApiTx
     )
 import Numeric.Natural
     ( Natural
     )
 
+
 import qualified Cardano.Address.Script as CA
 import qualified Cardano.Api as CardanoApi
 import qualified Cardano.Api.Shelley as CardanoApi
+import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Api as Ledger
 import qualified Cardano.Ledger.Api.Tx.Cert as Conway
 import qualified Cardano.Ledger.Shelley.TxCert as Shelley
 import qualified Cardano.Wallet.Primitive.Ledger.Convert as Convert
-import qualified Cardano.Wallet.Primitive.Types.Coin as W
-    ( Coin (..)
-    )
 import qualified Cardano.Wallet.Primitive.Types.Tx.Constraints as W
     ( TxSize (..)
     )
@@ -114,52 +138,15 @@ estimateSignedTxSize
     -> KeyWitnessCounts
     -> Tx era -- ^ existing wits in tx are ignored
     -> W.TxSize
-estimateSignedTxSize pparams nWits txWithWits =
-    let
-        -- Hack which allows us to rely on the ledger to calculate the size of
-        -- witnesses:
-        feeOfWits :: W.Coin
-        feeOfWits = minfee nWits <\> minfee mempty
-
-        sizeOfWits :: W.TxSize
-        sizeOfWits =
-            case feeOfWits `coinQuotRem` feePerByte of
-                (n, 0) -> W.TxSize n
-                (_, _) -> error $ unwords
-                    [ "estimateSignedTxSize:"
-                    , "the impossible happened!"
-                    , "Couldn't divide"
-                    , show feeOfWits
-                    , "lovelace (the fee contribution of"
-                    , show nWits
-                    , "witnesses) with"
-                    , show feePerByte
-                    , "lovelace/byte"
-                    ]
-
-        sizeOfTx :: W.TxSize
-        sizeOfTx =
-            fromIntegral @Integer @W.TxSize
-            $ unsignedTx ^. sizeTxF
-    in
-        sizeOfTx <> sizeOfWits
+estimateSignedTxSize pparams (KeyWitnessCounts nWit nBoot)tx =
+    TxSize
+    . (+ sizeOf_BootstrapWitnesses (intCast nBoot))
+    . integerToNatural
+    . view sizeTxF
+    $ mockWitnesses (KeyWitnessCounts nWit 0) pparams tx
   where
-    unsignedTx :: Tx era
-    unsignedTx =
-        txWithWits
-            & (witsTxL . addrTxWitsL) .~ mempty
-            & (witsTxL . bootAddrTxWitsL) .~ mempty
-
-    coinQuotRem :: W.Coin -> W.Coin -> (Natural, Natural)
-    coinQuotRem (W.Coin p) (W.Coin q) = quotRem p q
-
-    minfee :: KeyWitnessCounts -> W.Coin
-    minfee witCount = Convert.toWalletCoin $ Write.evaluateMinimumFee
-        pparams unsignedTx witCount
-
-    feePerByte :: W.Coin
-    feePerByte = Convert.toWalletCoin $
-        pparams ^. ppMinFeeAL
+    integerToNatural = fromMaybe (error "estimateSignedTxSize: negative size")
+        . intCastMaybe
 
 numberOfShelleyWitnesses :: Word -> KeyWitnessCounts
 numberOfShelleyWitnesses n = KeyWitnessCounts n 0
@@ -356,7 +343,6 @@ newtype TimelockKeyWitnessCounts = TimelockKeyWitnessCounts
 instance Semigroup TimelockKeyWitnessCounts where
     (TimelockKeyWitnessCounts a) <> (TimelockKeyWitnessCounts b)
         = TimelockKeyWitnessCounts (Map.unionWith max a b)
-
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
@@ -418,3 +404,73 @@ estimateMaxWitnessRequiredPerInput = \case
     -- https://cardanofoundation.atlassian.net/browse/ADP-2676
     CA.ActiveFromSlot _     -> 0
     CA.ActiveUntilSlot _    -> 0
+
+estimateSignedTxMinFee
+    :: forall era. IsRecentEra era
+    => PParams era
+    -> UTxO era
+    -> Tx era
+    -> KeyWitnessCounts
+    -> Coin
+estimateSignedTxMinFee pp _utxoNeededSoon tx (KeyWitnessCounts nWit nBoot) =
+    -- NOTE: We don't use mock bootstrap witnesses, but rely on the same
+    -- size estimation as coin selection does through 'estimateTxSize'
+    getMinFeeTx pp (mockWitnesses (KeyWitnessCounts nWit 0) pp tx)
+        <> bootWitFee
+  where
+    bootWitFee =
+        feeOfBytes
+            (getFeePerByte pp)
+            (sizeOf_BootstrapWitnesses $ intCast nBoot)
+
+-- Matching implementation in "Cardano.Write.Tx.SizeEstimation".
+-- Equivalence is tested in property.
+sizeOf_BootstrapWitnesses :: Natural -> Natural
+sizeOf_BootstrapWitnesses 0 = 0
+sizeOf_BootstrapWitnesses n = 4 + 180 * n
+
+-- Adds mock witnesses according to the supplied 'KeyWitnessCounts'. The mock
+-- bootstrap witnesses are chosen to be as large as cardano-wallet could
+-- theoretically generate.
+--
+-- Note: Existing witnesses in the tx will be overwritten.
+mockWitnesses
+    :: forall era. IsRecentEra era
+    => KeyWitnessCounts
+    -> PParams era
+    -> Tx era
+    -> Tx era
+mockWitnesses kwc pp tx =
+    addDummyWitsTx
+        pp
+        (dropWits tx)
+        (wordToInt nKeyWits)
+        (replicate (wordToInt nBootstrapWits) dummyByronAttributes)
+  where
+    wordToInt :: Word -> Int
+    wordToInt = fromMaybe (error "addDummyKeyWitnesses") . intCastMaybe
+
+    dropWits :: Tx era -> Tx era
+    dropWits x = x
+        & (witsTxL . bootAddrTxWitsL) .~ mempty
+        & (witsTxL . addrTxWitsL) .~ mempty
+
+    KeyWitnessCounts{nKeyWits, nBootstrapWits} = kwc
+    dummyByronAttributes =
+      Byron.mkAttributes
+        Byron.AddrAttributes
+          { Byron.aaVKDerivationPath = Just $ Byron.HDAddressPayload addrPayload
+          , Byron.aaNetworkMagic = Byron.NetworkTestnet maxBound
+          }
+      where
+        -- Largest address payload used by byron or icarus wallets.
+        --
+        -- Generated using:
+        -- >>> CBOR.toStrictByteString $ Cardano.Byron.Codec.Cbor.encodeDerivationPathAttr passphrase maxBound maxBound
+        addrPayload = unsafeFromHex
+            "01581e581cdab6b4557a5499c7265a1512045e6f29a371bda7894d03f2a041e7d3"
+
+        unsafeFromHex :: ByteString -> ByteString
+        unsafeFromHex =
+            either (error . show) id
+            . convertFromBase @ByteString @ByteString Base16

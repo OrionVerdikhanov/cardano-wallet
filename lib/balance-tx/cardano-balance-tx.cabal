@@ -58,6 +58,7 @@ library internal
     , cardano-ledger-api
     , cardano-ledger-babbage
     , cardano-ledger-binary
+    , cardano-ledger-byron
     , cardano-ledger-conway
     , cardano-ledger-core
     , cardano-ledger-mary
@@ -75,6 +76,7 @@ library internal
     , groups
     , int-cast
     , lens
+    , memory
     , MonadRandom
     , monoid-subclasses
     , nonempty-containers
