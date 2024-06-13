@@ -1,7 +1,20 @@
-#! /usr/bin/env -S nix shell 'nixpkgs#rsync' --command bash
+#! /usr/bin/env -S nix shell 'nixpkgs#rsync' 'nixpkgs#gnutar' --command bash
 # shellcheck shell=bash
 
 set -euox pipefail
+
+RELEASE_CANDIDATE_BRANCH=$(buildkite-agent meta-data get "release-candidate-branch")
+echo "RELEASE_CANDIDATE_BRANCH=$RELEASE_CANDIDATE_BRANCH"
+
+VERSION=$(buildkite-agent meta-data get "release-version")
+echo "VERSION=$VERSION"
+
+
+buildkite-agent artifact \
+    download "result/linux/cardano-wallet-$VERSION-linux64.tar.gz" "."
+
+
+tar xvzf "result/linux/cardano-wallet-$VERSION-linux64.tar.gz"
 
 cd test/e2e
 
@@ -12,9 +25,8 @@ mkdir -p "$TESTS_NODE_DB"/preprod
 rsync -a "$NODE_STATE_DIR"/ "$TESTS_NODE_DB"/preprod
 
 git fetch --all
-# RELEASE_CANDIDATE_BRANCH=$(buildkite-agent meta-data get "release-candidate-branch")
-RELEASE_CANDIDATE_BRANCH="release-candidate-new/v$(date +%Y-%m-%d)"
-echo "RELEASE_CANDIDATE_BRANCH=$RELEASE_CANDIDATE_BRANCH"
+
+
 
 git checkout "$RELEASE_CANDIDATE_BRANCH"
 
@@ -25,6 +37,7 @@ tmpfile=$(mktemp /tmp/node-preprod.XXXXXX)
 
 CARDANO_NODE_SOCKET_PATH="$tmpfile"
 export CARDANO_NODE_SOCKET_PATH
+
 
 nix-shell --run "./run_all_tests.sh"
 
