@@ -44,6 +44,7 @@ module Internal.Cardano.Write.Tx
     , toRecentEra
     , fromRecentEra
     , MaybeInRecentEra (..)
+    , InAnyRecentEra (..)
     , toRecentEraGADT
     , LatestLedgerEra
     , RecentEraConstraints
@@ -99,6 +100,7 @@ module Internal.Cardano.Write.Tx
     , TxOutInRecentEra (..)
     , ErrInvalidTxOutInEra (..)
     , unwrapTxOutInRecentEra
+    , wrapTxOutInRecentEra
 
     , computeMinimumCoinForTxOut
     , isBelowMinimumCoinForTxOut
@@ -176,6 +178,7 @@ import Cardano.Ledger.Alonzo.UTxO
 import Cardano.Ledger.Api
     ( coinTxOutL
     , ppKeyDepositL
+    , upgradeTxOut
     )
 import Cardano.Ledger.Api.UTxO
     ( EraUTxO (ScriptsNeeded)
@@ -188,6 +191,7 @@ import Cardano.Ledger.BaseTypes
     , StrictMaybe (..)
     , Version
     , maybeToStrictMaybe
+    , strictMaybeToMaybe
     )
 import Cardano.Ledger.Coin
     ( Coin (..)
@@ -435,6 +439,12 @@ shelleyBasedEra
     => CardanoApi.ShelleyBasedEra (CardanoApiEra era)
 shelleyBasedEra = shelleyBasedEraFromRecentEra $ recentEra @era
 
+data InAnyRecentEra (thing :: Type -> Type) where
+    InAnyRecentEra
+        :: IsRecentEra era
+        => RecentEra era
+        -> InAnyRecentEra thing
+
 data MaybeInRecentEra (thing :: Type -> Type)
     = InNonRecentEraByron
     | InNonRecentEraShelley
@@ -590,6 +600,18 @@ data TxOutInRecentEra =
         (Datum LatestLedgerEra)
         (Maybe (AlonzoScript LatestLedgerEra))
         -- Same contents as 'TxOut LatestLedgerEra'.
+
+wrapTxOutInRecentEra
+    :: forall era. IsRecentEra era
+    => TxOut era
+    -> TxOutInRecentEra
+wrapTxOutInRecentEra out = case recentEra @era of
+    RecentEraConway ->
+        let
+            BabbageTxOut addr v d s = out
+        in
+            TxOutInRecentEra addr v d (strictMaybeToMaybe s)
+    RecentEraBabbage -> wrapTxOutInRecentEra $ upgradeTxOut out
 
 data ErrInvalidTxOutInEra
     = InlinePlutusV3ScriptNotSupportedInBabbage

@@ -970,7 +970,7 @@ import qualified Internal.Cardano.Write.Tx.Balance as Write
     ( PartialTx (PartialTx)
     )
 import qualified Internal.Cardano.Write.Tx.Sign as Write
-    ( TimelockKeyWitnessCounts (TimelockKeyWitnessCounts)
+    ( TimelockKeyWitnessCounts (..)
     , estimateMinWitnessRequiredPerInput
     )
 import qualified Network.Ntp as Ntp
