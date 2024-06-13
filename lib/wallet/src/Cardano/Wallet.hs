@@ -144,8 +144,6 @@ module Cardano.Wallet
     , readNodeTipStateForTxWrite
     , buildSignSubmitTransaction
     , buildTransaction
-    , buildTransactionPure
-    , buildAndSignTransactionPure
     , buildAndSignTransaction
     , BuiltTx (..)
     , signTransaction
@@ -234,6 +232,7 @@ module Cardano.Wallet
 
     -- * Internal
     , putWalletCheckpoints
+    , balanceTx
     ) where
 
 import Prelude hiding
@@ -301,6 +300,7 @@ import Cardano.Wallet.Address.Derivation
     , Role (..)
     , SoftDerivation (..)
     , ToRewardAccount (..)
+    , delegationAddressS
     , deriveRewardAccount
     , liftDelegationAddressS
     , liftIndex
@@ -318,6 +318,7 @@ import Cardano.Wallet.Address.Derivation.MintBurn
     )
 import Cardano.Wallet.Address.Derivation.SharedKey
     ( SharedKey (..)
+    , constructAddressFromIx
     , replaceCosignersWithVerKeys
     )
 import Cardano.Wallet.Address.Derivation.Shelley
@@ -623,7 +624,6 @@ import Cardano.Wallet.Transaction.Built
 import Cardano.Write.Tx
     ( ErrBalanceTx (..)
     , ErrBalanceTxUnableToCreateChangeError (..)
-    , balanceTx
     )
 import Control.Arrow
     ( (>>>)
@@ -883,6 +883,7 @@ import qualified Internal.Cardano.Write.Tx as Write
 import qualified Internal.Cardano.Write.Tx.Balance as Write
     ( PartialTx
     , UTxOIndex
+    , balanceTx
     , constructUTxOIndex
     , fromWalletUTxO
     )
@@ -2149,6 +2150,76 @@ readNodeTipStateForTxWrite netLayer = do
             $ ErrNodeNotYetInRecentEra nopp
         Right pp -> pure (pp, timeTranslation)
 
+-- | Wallet-specific wrapped version of 'Write.balanceTx', made for the new tx
+-- workflow with Shelley- and Shared- wallet flavors.
+--
+-- Changes to the change state are not written to the DB.
+balanceTx
+    :: forall s era.
+        ( GenChange s
+        , WalletFlavor s
+        , HasSNetworkId (NetworkOf s)
+        , Write.IsRecentEra era
+        , Including AllFlavors '[ 'ShelleyF, 'SharedF] (FlavorOf s)
+        )
+    => WalletLayer IO s
+    -> Write.PParams era
+    -> TimeTranslation
+    -> PartialTx era
+    -> IO (Write.Tx era)
+balanceTx wrk pp timeTranslation partialTx = do
+    (utxo, wallet, _txs) <- liftIO $ readWalletUTxO wrk
+    -- FIXME: Why are we not using the availableUTxO here?
+    let utxoIndex =
+            Write.constructUTxOIndex $
+            Write.fromWalletUTxO utxo
+
+    let utxoAssumptions = case walletFlavor @s of
+            ShelleyWallet -> AllKeyPaymentCredentials
+            SharedWallet -> AllScriptPaymentCredentialsFrom
+                (Shared.paymentTemplate (getState wallet))
+                (sharedWalletScriptLookup (getState wallet)
+                    . Convert.toWalletAddress)
+
+    let changeState = getState wallet
+    (tx, _changeState') <- throwBalanceTxErr $ Write.balanceTx
+        pp
+        timeTranslation
+        utxoAssumptions
+        utxoIndex
+        (defaultChangeAddressGen argGenChange)
+        changeState
+        partialTx
+
+    return tx
+  where
+    argGenChange :: ArgGenChange s
+    argGenChange = case walletFlavor @s of
+        ShelleyWallet -> delegationAddressS @(NetworkOf s)
+        SharedWallet -> constructAddressFromIx @(NetworkOf s) UtxoInternal
+
+    sharedWalletScriptLookup
+        :: SharedState (NetworkOf s) SharedKey -> Address -> CA.Script KeyHash
+    sharedWalletScriptLookup s addr = case fst (isShared addr s) of
+            Nothing ->
+                error $ "Some inputs selected by coin selection do not belong "
+                <> "to multi-signature wallet"
+            Just (ix,role) ->
+                let template = paymentTemplate s
+                    role' = case role of
+                        UtxoExternal -> CAShelley.UTxOExternal
+                        UtxoInternal -> CAShelley.UTxOInternal
+                        MutableAccount ->
+                            error "role is specified only for payment credential"
+                in replaceCosignersWithVerKeys role' template ix
+
+    throwBalanceTxErr = throwWrappedErr ExceptionBalanceTx
+      where
+        throwOnErr :: (MonadIO m, Exception e) => Either e a -> m a
+        throwOnErr = either (liftIO . throwIO) pure
+
+        throwWrappedErr f e = runExceptT (withExceptT f e) >>= throwOnErr
+
 -- | Build, Sign, Submit transaction.
 --
 -- Requires the encryption passphrase in order to decrypt the root private key.
@@ -2433,7 +2504,7 @@ buildTransactionPure
             Write.constructUTxOIndex $
             Write.fromWalletUTxO utxo
     withExceptT Left $
-        balanceTx @_ @_ @s
+        Write.balanceTx @_ @_ @s
             pparams
             timeTranslation
             (utxoAssumptionsForWallet (walletFlavor @s))
@@ -2562,34 +2633,18 @@ constructUnbalancedSharedTransaction
     -> DBLayer IO (SharedState n SharedKey)
     -> TransactionCtx
     -> PreSelection
-    -> ExceptT ErrConstructTx IO
-        ( Cardano.TxBody (Write.CardanoApiEra era)
-        , (Address -> CA.Script KeyHash)
-        )
+    -> ExceptT ErrConstructTx IO (Cardano.TxBody (Write.CardanoApiEra era))
 constructUnbalancedSharedTransaction era db txCtx sel = db & \DBLayer{..} -> do
     cp <- lift $ atomically readCheckpoint
     let s = getState cp
         scriptM =
             flip (replaceCosignersWithVerKeys CAShelley.Stake) minBound <$>
             delegationTemplate s
-        getScript addr = case fst (isShared addr s) of
-            Nothing ->
-                error $ "Some inputs selected by coin selection do not belong "
-                <> "to multi-signature wallet"
-            Just (ix,role) ->
-                let template = paymentTemplate s
-                    role' = case role of
-                        UtxoExternal -> CAShelley.UTxOExternal
-                        UtxoInternal -> CAShelley.UTxOInternal
-                        MutableAccount ->
-                            error "role is specified only for payment credential"
-                in replaceCosignersWithVerKeys role' template ix
     when (containsWithdrawal (txCtx ^. #txWithdrawal)) $
         assertIsVoting db era
-    sealedTx <- mapExceptT atomically $ do
+    mapExceptT atomically $ do
         withExceptT ErrConstructTxBody $ ExceptT $ pure $
             mkUnsignedTransaction netId (Right scriptM) txCtx (Left sel)
-    pure (sealedTx, getScript)
   where
     netId = networkIdVal $ sNetworkId @n
 
@@ -3159,7 +3214,7 @@ transactionFee DBLayer{atomically, walletState} protocolParams
 
         wrapErrBalanceTx $ calculateFeePercentiles $ do
             res <- runExceptT $
-                balanceTx @_ @_ @s
+                Write.balanceTx @_ @_ @s
                     protocolParams
                     timeTranslation
                     (utxoAssumptionsForWallet (walletFlavor @s))
