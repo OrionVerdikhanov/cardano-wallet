@@ -2916,16 +2916,18 @@ constructTransaction api knownPools poolStatus apiWalletId body = do
                 foldMap timelockKeyWitCountsForMintBurn
                 $ maybe [] NE.toList mintBurnDatum
 
-        balancedTx <- fmap (toApiSerialisedTransaction (body ^. #encoding)) . liftIO $ W.balanceTx
-            wrk
-            pp
-            timeTranslation
-            PartialTx
-                { tx = Write.fromCardanoApiTx $ Cardano.Tx unbalancedTx []
-                , extraUTxO = mempty
-                , redeemers = mempty
-                , timelockKeyWitnessCounts = mintBurnTimelockKeyWitCounts
-                }
+        balancedTx <-
+            fmap (toApiSerialisedTransaction (body ^. #encoding))
+            . liftIO $ W.balanceTx
+                wrk
+                pp
+                timeTranslation
+                PartialTx
+                    { tx = Write.fromCardanoApiTx $ Cardano.Tx unbalancedTx []
+                    , extraUTxO = mempty
+                    , redeemers = mempty
+                    , timelockKeyWitnessCounts = mintBurnTimelockKeyWitCounts
+                    }
 
         apiDecoded <- decodeTransaction @_ @n api apiWalletId
                       (toApiDecodeTransactionPostData balancedTx)
@@ -3352,7 +3354,9 @@ constructSharedTransaction
                         }
 
                 apiDecoded <- decodeSharedTransaction api (ApiT wid)
-                              (ApiDecodeTransactionPostData (ApiT (sealWriteTx balancedTx)) Nothing)
+                    $ ApiDecodeTransactionPostData
+                        (ApiT (sealWriteTx balancedTx))
+                        Nothing
                 let deposits = case optionalDelegationAction of
                         Just (JoinRegisteringKey _poolId) ->
                             [W.getStakeKeyDeposit pp]

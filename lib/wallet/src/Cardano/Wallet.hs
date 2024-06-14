@@ -146,6 +146,7 @@ module Cardano.Wallet
     , buildTransaction
     , buildAndSignTransaction
     , BuiltTx (..)
+    , balanceTx
     , signTransaction
     , constructTransaction
     , constructTxMeta
@@ -232,7 +233,6 @@ module Cardano.Wallet
 
     -- * Internal
     , putWalletCheckpoints
-    , balanceTx
     ) where
 
 import Prelude hiding
@@ -2214,11 +2214,6 @@ balanceTx wrk pp timeTranslation partialTx = do
                 in replaceCosignersWithVerKeys role' template ix
 
     throwBalanceTxErr = throwWrappedErr ExceptionBalanceTx
-      where
-        throwOnErr :: (MonadIO m, Exception e) => Either e a -> m a
-        throwOnErr = either (liftIO . throwIO) pure
-
-        throwWrappedErr f e = runExceptT (withExceptT f e) >>= throwOnErr
 
 -- | Build, Sign, Submit transaction.
 --
@@ -2307,11 +2302,6 @@ buildSignSubmitTransaction db@DBLayer{..} netLayer txLayer
             & fmap (BuiltTx{..},)
             & liftIO
   where
-    throwOnErr :: (MonadIO m, Exception e) => Either e a -> m a
-    throwOnErr = either (liftIO . throwIO) pure
-
-    throwWrappedErr f e = runExceptT (withExceptT f e) >>= throwOnErr
-
     wrapRootKeyError = ExceptionWitnessTx . ErrWitnessTxWithRootKey
     wrapNetworkError = ExceptionSubmitTx . ErrSubmitTxNetwork
 
@@ -3238,13 +3228,6 @@ transactionFee DBLayer{atomically, walletState} protocolParams
         . ExceptT
         . pure
 
-    throwWrappedErr
-        :: (Exception e, MonadIO m)
-        => (e' -> e)
-        -> ExceptT e' m a ->
-        m a
-    throwWrappedErr f a = either (throwIO . f) pure =<< runExceptT a
-
 -- | Repeatedly (100 times) runs given transaction fee estimation calculation
 -- returning 1st and 9nth decile (10nth and 90nth percentile) values of a
 -- recoded distribution.
@@ -3908,6 +3891,13 @@ data PoolRetirementEpochInfo = PoolRetirementEpochInfo
         -- ^ The retirement epoch of a pool.
     }
     deriving (Eq, Generic, Show)
+
+throwOnErr :: (MonadIO m, Exception e) => Either e a -> m a
+throwOnErr = either (liftIO . throwIO) pure
+
+throwWrappedErr
+    :: (MonadIO m, Exception e1) => (e2 -> e1) -> ExceptT e2 m b -> m b
+throwWrappedErr f e = runExceptT (withExceptT f e) >>= throwOnErr
 
 {-------------------------------------------------------------------------------
                                     Logging
